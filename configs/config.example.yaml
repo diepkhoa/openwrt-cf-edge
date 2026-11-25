@@ -1,0 +1,56 @@
+# Example configuration for cf-edge (/etc/cf-edge/config.yaml)
+# This file is read-only at runtime; dynamic state is stored in /tmp/cf-edge-state.json.
+
+node_name: "x96air" # Defaults to os.Hostname() if omitted
+
+wan:
+  iface_v4: "wan"
+  iface_v6: "wan6"       # Leave empty if node does not use a separate IPv6 interface
+  overlay_iface: "wt0"   # NetBird/WireGuard overlay interface (used by DDoS detector)
+  lan_iface: ""          # Optional: e.g. "br-lan" to subtract TX_LAN from Junk_Mbps
+
+cloudflare:
+  zone_id: "your-zone-id"
+  api_token: "your-dns-edit-token" # Scoped to Zone:DNS:Edit only
+  records:
+    - subdomain: "wg-x96air.example.com"
+      ipv4: true
+      ipv6: true
+      proxied: false # Set true if Cloudflare Orange Cloud proxy is enabled (skips reconcile)
+
+reconcile:
+  enabled: true
+  interval: "10m"
+  resolvers:
+    - "1.1.1.1:53"
+    - "8.8.8.8:53"
+    - "1.0.0.1:53"
+
+# Optional: Enable on PPPoE routers prone to netifd AUTH_FAILED lockout
+pppoe_guard:
+  enabled: false
+  boot_grace: "90s"
+  initial_wait: "45s"
+  ping_targets:
+    - "1.1.1.1"
+    - "8.8.8.8"
+    - "203.162.4.190"
+
+# Optional: Enable on Edge Router cooperating with a Cloudflare Maintenance Worker
+ddos_shield:
+  enabled: false
+  worker_url: "https://maintenance.example.com"
+  worker_token: "your-worker-bearer-token"
+  wan_ingress_port: 443
+  check_interval: "5s"
+  sustain_duration: "25s"
+  conntrack_threshold: 5000
+  junk_mbps_threshold: 300
+  rx_pps_threshold: 80000
+  max_redials_per_hour: 3
+  status_poll_interval: "2m"
+
+telegram:
+  enabled: false
+  bot_token: "your-bot-token"
+  chat_id: "your-chat-id"

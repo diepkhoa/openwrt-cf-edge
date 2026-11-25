@@ -1,0 +1,14 @@
+# Binaries & build outputs
+/dist/
+/cf-edge
+/cf-edge-*
+*.exe
+*.test
+*.out
+
+# Local secrets & runtime artifacts
+config.yaml
+*.local.yaml
+*.log
+.DS_Store
+Thumbs.db

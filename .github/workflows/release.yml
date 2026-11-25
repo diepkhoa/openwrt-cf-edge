@@ -1,0 +1,70 @@
+name: Release & Test
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run unit tests
+        run: go test -v -race ./...
+
+      - name: Run go vet (linux/arm64)
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: arm64
+        run: go vet ./...
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build static binaries
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          LDFLAGS="-s -w -X main.version=${GITHUB_REF_NAME} -X main.commit=${GITHUB_SHA} -X main.buildDate=${BUILD_DATE} -X main.githubRepo=${GITHUB_REPOSITORY}"
+
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/cf-edge-linux-arm64 ./cmd/cf-edge
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/cf-edge-linux-amd64 ./cmd/cf-edge
+
+          cp openwrt/cf-edge.init dist/cf-edge.init
+          cp openwrt/install.sh dist/install.sh
+          cp configs/config.example.yaml dist/config.example.yaml
+
+          (cd dist && sha256sum cf-edge-linux-arm64 cf-edge-linux-amd64 > checksums.txt)
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/cf-edge-linux-arm64
+            dist/cf-edge-linux-amd64
+            dist/checksums.txt
+            dist/cf-edge.init
+            dist/install.sh
+            dist/config.example.yaml
+          generate_release_notes: true
