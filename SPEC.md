@@ -21,7 +21,7 @@ cf-edge version
 
 ## Quick Install (OpenWrt)
 ```sh
-sh -c "$(uclient-fetch -qO- https://github.com/diepkhoa/openwrt-cf-edge/releases/latest/download/install.sh)"
+uclient-fetch -T 90 -O /tmp/install.sh https://github.com/diepkhoa/openwrt-cf-edge/releases/latest/download/install.sh && sh /tmp/install.sh
 ```
 Edit `/etc/cf-edge/config.yaml` (see [`configs/config.example.yaml`](configs/config.example.yaml)), then start the service:
 ```sh
