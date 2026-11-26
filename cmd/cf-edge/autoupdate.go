@@ -23,6 +23,7 @@ type autoUpdater struct {
 	shieldLockPath string
 	logger         *slog.Logger
 	nowFn          func() time.Time
+	customClock    bool
 	updateFn       selfUpdateFunc
 	restartFn      func() error
 }
@@ -84,10 +85,13 @@ func (u *autoUpdater) Run(ctx context.Context) {
 	}
 
 	for {
+		if !u.customClock {
+			syncLocalTimezone()
+		}
 		now := u.nowFn()
 		next := nextDailyRun(now, hour, minute)
 		wait := next.Sub(now)
-		u.logger.Info("scheduled daily auto-update", "time", u.cfg.AutoUpdate.Time, "next_run", next.Format("2006-01-02 15:04:05"))
+		u.logger.Info("scheduled daily auto-update", "time", u.cfg.AutoUpdate.Time, "next_run", next.Format("2006-01-02 15:04:05 -07:00"))
 
 		timer := time.NewTimer(wait)
 		select {
