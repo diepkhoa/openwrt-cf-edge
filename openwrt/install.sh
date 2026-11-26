@@ -23,44 +23,51 @@ detect_arch() {
 	esac
 }
 
-ensure_tls_certs() {
-	has_ca=0
-	if [ -f /etc/ssl/certs/ca-certificates.crt ] || [ -f /etc/ssl/cert.pem ]; then
-		has_ca=1
+ensure_deps() {
+	pkgs=""
+	if [ ! -f /etc/ssl/certs/ca-certificates.crt ] && [ ! -f /etc/ssl/cert.pem ]; then
+		pkgs="${pkgs} ca-bundle"
 	fi
-	has_tls=0
-	if [ -e /lib/libustream-ssl.so ] || [ -e /usr/lib/libustream-ssl.so ]; then
-		has_tls=1
+	if [ ! -e /lib/libustream-ssl.so ] && [ ! -e /usr/lib/libustream-ssl.so ]; then
+		pkgs="${pkgs} libustream-mbedtls"
 	fi
-	if [ "$has_ca" -eq 1 ] && [ "$has_tls" -eq 1 ]; then
+	if ! command -v curl >/dev/null 2>&1; then
+		pkgs="${pkgs} curl"
+	fi
+	pkgs="${pkgs# }"
+	if [ -z "$pkgs" ]; then
 		return 0
 	fi
 	if command -v apk >/dev/null 2>&1; then
-		log "Installing TLS dependencies (ca-bundle, libustream-mbedtls) via apk..."
+		log "Installing dependencies (${pkgs}) via apk..."
 		apk update >/dev/null 2>&1 || true
-		apk add ca-bundle libustream-mbedtls >/dev/null 2>&1 || true
+		# shellcheck disable=SC2086
+		apk add $pkgs >/dev/null 2>&1 || true
 	elif command -v opkg >/dev/null 2>&1; then
-		log "Installing TLS dependencies (ca-bundle, libustream-mbedtls) via opkg..."
+		log "Installing dependencies (${pkgs}) via opkg..."
 		opkg update >/dev/null 2>&1 || true
-		opkg install ca-bundle libustream-mbedtls >/dev/null 2>&1 || true
+		# shellcheck disable=SC2086
+		opkg install $pkgs >/dev/null 2>&1 || true
 	fi
 }
 
 fetch_file() {
 	url="$1"
 	dest="$2"
-	if command -v uclient-fetch >/dev/null 2>&1; then
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL --connect-timeout 15 --max-time 120 -o "$dest" "$url" || curl -4 -fsSL --connect-timeout 15 --max-time 120 -o "$dest" "$url"
+	elif command -v uclient-fetch >/dev/null 2>&1; then
 		uclient-fetch -T 90 -q -O "$dest" "$url" || uclient-fetch -4 -T 90 -q -O "$dest" "$url"
 	elif command -v wget >/dev/null 2>&1; then
 		wget -T 90 -q -O "$dest" "$url" || wget -4 -T 90 -q -O "$dest" "$url"
 	else
-		log "Error: neither uclient-fetch nor wget is available"
+		log "Error: neither curl, uclient-fetch, nor wget is available"
 		exit 1
 	fi
 }
 
 ARCH="$(detect_arch)"
-ensure_tls_certs
+ensure_deps
 
 if [ "$VERSION" = "latest" ]; then
 	BASE_URL="https://github.com/${REPO}/releases/latest/download"
