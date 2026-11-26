@@ -22,6 +22,8 @@ func main() {
 }
 
 func run(args []string) error {
+	syncLocalTimezone()
+
 	if len(args) == 0 {
 		printUsage()
 		return fmt.Errorf("missing subcommand")
