@@ -20,7 +20,7 @@ func runStatus(args []string) error {
 		return err
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	logger := newLogger(os.Stderr, slog.LevelWarn, false)
 	deps, err := buildDeps(*cfgPath, logger)
 	if err != nil {
 		return err

@@ -24,7 +24,7 @@ func runUpdate(args []string) error {
 		return fmt.Errorf("DDoS shield lock (%s) is active; run 'cf-edge shield exit' before updating DNS", state.DefaultShieldLockPath)
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := newLogger(os.Stdout, slog.LevelInfo, false)
 	deps, err := buildDeps(*cfgPath, logger)
 	if err != nil {
 		return err

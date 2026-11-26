@@ -100,6 +100,7 @@ func runDaemon(args []string) error {
 	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
 	cfgPath := fs.String("c", defaultConfigPath, "path to config.yaml")
 	debug := fs.Bool("debug", false, "enable debug logging")
+	noTimestamp := fs.Bool("no-timestamp", false, "omit timestamp in logs (auto-enabled when stdout is not a TTY)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -108,7 +109,7 @@ func runDaemon(args []string) error {
 	if *debug {
 		level = slog.LevelDebug
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+	logger := newLogger(os.Stdout, level, *noTimestamp)
 
 	deps, err := buildDeps(*cfgPath, logger)
 	if err != nil {

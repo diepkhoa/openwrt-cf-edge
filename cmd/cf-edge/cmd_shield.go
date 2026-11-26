@@ -25,7 +25,7 @@ func runShield(args []string) error {
 		return fmt.Errorf("usage: cf-edge shield [-c config.yaml] <enter [--no-redial] | exit | status>")
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := newLogger(os.Stdout, slog.LevelInfo, false)
 	deps, err := buildDeps(*cfgPath, logger)
 	if err != nil {
 		return err
