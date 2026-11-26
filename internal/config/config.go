@@ -53,7 +53,15 @@ type Config struct {
 	Reconcile  ReconcileConfig  `yaml:"reconcile"`
 	PPPoEGuard PPPoEGuardConfig `yaml:"pppoe_guard"`
 	DDoSShield DDoSShieldConfig `yaml:"ddos_shield"`
+	AutoUpdate AutoUpdateConfig `yaml:"auto_update"`
 	Telegram   TelegramConfig   `yaml:"telegram"`
+}
+
+// AutoUpdateConfig configures scheduled daily self-updates from GitHub Releases.
+type AutoUpdateConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Time    string `yaml:"time"`    // Daily local wall-clock time in 24h "HH:MM" format (default "03:30").
+	Restart bool   `yaml:"restart"` // Restart /etc/init.d/cf-edge after updating binary (default true).
 }
 
 // WANConfig defines the WAN and overlay/LAN network interfaces on OpenWrt.

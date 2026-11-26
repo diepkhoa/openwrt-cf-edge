@@ -189,6 +189,7 @@ func runDaemon(args []string) error {
 		"reconcile", deps.cfg.Reconcile.Enabled,
 		"pppoe_guard", deps.cfg.PPPoEGuard.Enabled,
 		"ddos_shield", deps.cfg.DDoSShield.Enabled,
+		"auto_update", deps.cfg.AutoUpdate.Enabled,
 	)
 
 	var wg sync.WaitGroup
@@ -212,6 +213,10 @@ func runDaemon(args []string) error {
 	}
 	if deps.cfg.DDoSShield.Enabled || state.IsShielded(state.DefaultShieldLockPath) {
 		start("ddos.ShieldManager", deps.shieldMgr.Run)
+	}
+	if deps.cfg.AutoUpdate.Enabled {
+		autoUpd := newAutoUpdater(deps.cfg, deps.notifier, state.DefaultShieldLockPath, logger)
+		start("autoupdate.Scheduler", autoUpd.Run)
 	}
 
 	<-ctx.Done()

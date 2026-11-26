@@ -170,3 +170,18 @@ func FormatShieldExited(nodeName, detail string) string {
 		html.EscapeString(detail),
 	)
 }
+
+// FormatAutoUpdate builds an HTML alert when a scheduled binary update succeeds.
+func FormatAutoUpdate(nodeName, fromVersion, toVersion string, restarting bool) string {
+	action := "binary updated"
+	if restarting {
+		action = "binary updated, restarting service"
+	}
+	return fmt.Sprintf(
+		"<b>[cf-edge] Auto-Update</b> — <code>%s</code>\n• Version: <code>%s</code> → <code>%s</code>\n• Action: %s",
+		html.EscapeString(nodeName),
+		html.EscapeString(fromVersion),
+		html.EscapeString(toVersion),
+		action,
+	)
+}

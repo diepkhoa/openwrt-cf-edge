@@ -106,6 +106,9 @@ cloudflare:
 	if cfg.DDoSShield.WANIngressPort != 443 || cfg.DDoSShield.RXPPSThreshold != 80000 {
 		t.Fatalf("unexpected ddos defaults: %+v", cfg.DDoSShield)
 	}
+	if cfg.AutoUpdate.Enabled || cfg.AutoUpdate.Time != "03:30" || !cfg.AutoUpdate.Restart {
+		t.Fatalf("unexpected auto_update defaults: %+v", cfg.AutoUpdate)
+	}
 }
 
 func TestLoadFromFile(t *testing.T) {
@@ -174,6 +177,32 @@ func TestParseValidationErrors(t *testing.T) {
 			yaml: "cloudflare:\n  zone_id: z\n  api_token: t\n  records:\n    - subdomain: a.b\n      ipv4: true\ntelegram:\n  enabled: true\n  bot_token: b",
 			want: "chat_id",
 		},
+		{
+			name: "auto_update invalid time",
+			yaml: "cloudflare:\n  zone_id: z\n  api_token: t\n  records:\n    - subdomain: a.b\n      ipv4: true\nauto_update:\n  enabled: true\n  time: \"25:99\"",
+			want: "auto_update.time",
+		},
+	}
+
+	// Also verify normalizing single-digit hour and preserving restart=false.
+	customAU := `
+cloudflare:
+  zone_id: z
+  api_token: t
+  records:
+    - subdomain: a.b
+      ipv4: true
+auto_update:
+  enabled: true
+  time: "4:5"
+  restart: false
+`
+	parsedAU, err := Parse([]byte(customAU))
+	if err != nil {
+		t.Fatalf("unexpected auto_update parse error: %v", err)
+	}
+	if !parsedAU.AutoUpdate.Enabled || parsedAU.AutoUpdate.Time != "04:05" || parsedAU.AutoUpdate.Restart {
+		t.Fatalf("unexpected parsed auto_update: %+v", parsedAU.AutoUpdate)
 	}
 
 	for _, tc := range cases {

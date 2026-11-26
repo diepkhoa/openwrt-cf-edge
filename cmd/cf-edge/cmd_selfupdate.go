@@ -62,14 +62,14 @@ func runSelfUpdate(args []string) error {
 		fmt.Printf("Already on %s\n", tag)
 		return nil
 	}
-	fmt.Printf("Updated %s to %s\n", execPath, tag)
+	fmt.Printf("Updated cf-edge to %s\n", tag)
 
 	if *restart {
 		cmd := exec.CommandContext(ctx, "/etc/init.d/cf-edge", "restart")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("restart service failed: %w (%s)", err, strings.TrimSpace(string(out)))
 		}
-		fmt.Println("Service /etc/init.d/cf-edge restarted")
+		fmt.Println("Service cf-edge restarted")
 	}
 	return nil
 }

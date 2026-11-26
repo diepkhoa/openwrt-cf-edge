@@ -38,6 +38,11 @@ func defaultConfig() Config {
 			MaxRedialsPerHour:  3,
 			StatusPollInterval: Duration(2 * time.Minute),
 		},
+		AutoUpdate: AutoUpdateConfig{
+			Enabled: false,
+			Time:    "03:30",
+			Restart: true,
+		},
 	}
 }
 
@@ -60,19 +65,19 @@ func (c *Config) normalizeAndValidate() error {
 		return errors.New("wan.iface_v4 must not be empty")
 	}
 
-	if err := c.validateCloudflare(); err != nil {
-		return err
+	for _, fn := range []func() error{
+		c.validateCloudflare,
+		c.validateReconcile,
+		c.validatePPPoEGuard,
+		c.validateDDoSShield,
+		c.validateAutoUpdate,
+		c.validateTelegram,
+	} {
+		if err := fn(); err != nil {
+			return err
+		}
 	}
-	if err := c.validateReconcile(); err != nil {
-		return err
-	}
-	if err := c.validatePPPoEGuard(); err != nil {
-		return err
-	}
-	if err := c.validateDDoSShield(); err != nil {
-		return err
-	}
-	return c.validateTelegram()
+	return nil
 }
 
 func (c *Config) validateCloudflare() error {
@@ -218,5 +223,32 @@ func (c *Config) validateTelegram() error {
 	if c.Telegram.BotToken == "" || c.Telegram.ChatID == "" {
 		return errors.New("telegram.bot_token and telegram.chat_id are required when telegram is enabled")
 	}
+	return nil
+}
+
+// ParseDailyTime parses a 24-hour "HH:MM" wall-clock string.
+func ParseDailyTime(raw string) (int, int, error) {
+	s := strings.TrimSpace(raw)
+	parts := strings.Split(s, ":")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("auto_update.time %q must use HH:MM 24h format", raw)
+	}
+	hour, errH := strconv.Atoi(parts[0])
+	min, errM := strconv.Atoi(parts[1])
+	if errH != nil || errM != nil || hour < 0 || hour > 23 || min < 0 || min > 59 {
+		return 0, 0, fmt.Errorf("auto_update.time %q out of range (expected 00:00..23:59)", raw)
+	}
+	return hour, min, nil
+}
+
+func (c *Config) validateAutoUpdate() error {
+	if strings.TrimSpace(c.AutoUpdate.Time) == "" {
+		c.AutoUpdate.Time = "03:30"
+	}
+	hour, min, err := ParseDailyTime(c.AutoUpdate.Time)
+	if err != nil {
+		return err
+	}
+	c.AutoUpdate.Time = fmt.Sprintf("%02d:%02d", hour, min)
 	return nil
 }
