@@ -50,6 +50,12 @@ ddos_shield:
   max_redials_per_hour: 3
   status_poll_interval: "2m"
 
+# Optional: Check GitHub Releases once per day at a custom local time (24h "HH:MM")
+auto_update:
+  enabled: false
+  time: "03:30"
+  restart: true
+
 telegram:
   enabled: false
   bot_token: "your-bot-token"
