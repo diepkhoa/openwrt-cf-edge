@@ -5,6 +5,12 @@ on:
     branches: [main, master]
     tags: ["v*"]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.2). Leave empty to auto-bump patch from latest vX.Y.Z tag."
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -31,22 +37,63 @@ jobs:
 
   release:
     needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
+      - name: Resolve and tag release version
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -eu
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG="$(printf '%s' "${INPUT_TAG}" | tr -d '[:space:]')"
+            if [ -z "${TAG}" ]; then
+              LATEST="$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+              if [ -z "${LATEST}" ]; then
+                TAG="v0.1.0"
+              else
+                BASE="${LATEST#v}"
+                MAJOR="${BASE%%.*}"
+                REST="${BASE#*.}"
+                MINOR="${REST%%.*}"
+                PATCH="${REST##*.}"
+                TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+              fi
+            fi
+            if ! printf '%s\n' "${TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+              echo "Error: tag must match vX.Y.Z (got '${TAG}')" >&2
+              exit 1
+            fi
+            if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+              echo "Error: tag '${TAG}' already exists" >&2
+              exit 1
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "${TAG}" -m "Release ${TAG}"
+            git push origin "refs/tags/${TAG}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+
       - name: Build static binaries
         env:
           CGO_ENABLED: "0"
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
         run: |
           mkdir -p dist
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          LDFLAGS="-s -w -X main.version=${GITHUB_REF_NAME} -X main.commit=${GITHUB_SHA} -X main.buildDate=${BUILD_DATE} -X main.githubRepo=${GITHUB_REPOSITORY}"
+          LDFLAGS="-s -w -X main.version=${RELEASE_TAG} -X main.commit=${GITHUB_SHA} -X main.buildDate=${BUILD_DATE} -X main.githubRepo=${GITHUB_REPOSITORY}"
 
           GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/cf-edge-linux-arm64 ./cmd/cf-edge
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/cf-edge-linux-amd64 ./cmd/cf-edge
@@ -60,6 +107,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.meta.outputs.tag }}
           files: |
             dist/cf-edge-linux-arm64
             dist/cf-edge-linux-amd64
