@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/diepkhoa/openwrt-cf-edge/internal/config"
@@ -74,10 +75,59 @@ func TestTelegramSendFailures(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		c := NewTelegramClient(config.TelegramConfig{Enabled: true, BotToken: "t", ChatID: "c"}, WithBaseURL(srv.URL))
+		c := NewTelegramClient(config.TelegramConfig{Enabled: true, BotToken: "t", ChatID: "c"}, WithBaseURL(srv.URL), WithRetryDelay(0))
 		err := c.Send(context.Background(), "hi")
 		if err == nil || !strings.Contains(err.Error(), "HTTP 500") {
 			t.Fatalf("expected HTTP 500 error, got %v", err)
 		}
 	})
+}
+
+func TestTelegramSendRedactsTokenOnTransportError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	deadURL := srv.URL
+	srv.Close() // closed port forces immediate connection refused *url.Error
+
+	const secretToken = "99887766:SUPER_SECRET_BOT_TOKEN"
+	c := NewTelegramClient(
+		config.TelegramConfig{Enabled: true, BotToken: secretToken, ChatID: "c"},
+		WithBaseURL(deadURL),
+		WithRetryDelay(0),
+	)
+	err := c.Send(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("expected error against closed server")
+	}
+	if strings.Contains(err.Error(), secretToken) {
+		t.Fatalf("error must not leak bot_token, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "/bot***/sendMessage") {
+		t.Fatalf("expected redacted bot path in error, got: %v", err)
+	}
+}
+
+func TestTelegramSendRetriesTransientErrors(t *testing.T) {
+	var attempts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) < 3 {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte("bad gateway"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	c := NewTelegramClient(
+		config.TelegramConfig{Enabled: true, BotToken: "tok", ChatID: "chat"},
+		WithBaseURL(srv.URL),
+		WithRetryDelay(0),
+	)
+	if err := c.Send(context.Background(), "hello"); err != nil {
+		t.Fatalf("expected retry recovery on 3rd attempt, got: %v", err)
+	}
+	if attempts.Load() != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts.Load())
+	}
 }
