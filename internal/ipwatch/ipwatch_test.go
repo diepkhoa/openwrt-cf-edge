@@ -264,3 +264,43 @@ func TestWatcherPreemptsAndRespectsShieldLock(t *testing.T) {
 		t.Fatalf("expected no sync triggers while shield.lock exists")
 	}
 }
+
+func TestDiscoverIPv6PrefixDelegationFallbackToLANIface(t *testing.T) {
+	cfg := testConfig(true)
+	cfg.WAN.LANIface = "br-lan"
+
+	ub := &fakeUbus{
+		statuses: map[string]ubus.InterfaceStatus{
+			"wan":  {Up: true, L3Device: "pppoe-wan", IPv4Address: []ubus.IPv4Address{{Address: "198.51.100.10"}}},
+			"wan6": {Up: true, L3Device: "pppoe-wan"},
+		},
+	}
+	// pppoe-wan only has link-local fe80::1 while PD assigns GUA onto br-lan.
+	ni := &fakeNet{
+		v6Addrs: map[string][]netutil.IPv6AddrInfo{
+			"pppoe-wan": {{Addr: netip.MustParseAddr("fe80::1"), PreferredLFT: 9999}},
+			"br-lan":    {{Addr: netip.MustParseAddr("2001:db8:cafe::1"), Deprecated: false, PreferredLFT: 3600}},
+		},
+	}
+	failSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer failSrv.Close()
+
+	d := NewDiscoverer(
+		cfg, ub, ni, nil,
+		WithProbeURLs("", "", failSrv.URL),
+		WithHTTPClientFactory(func(_, _ string, timeout time.Duration) *http.Client {
+			return &http.Client{Timeout: timeout}
+		}),
+		WithRetryPolicy(1, 0),
+	)
+
+	ip6, err := d.DiscoverIPv6(context.Background())
+	if err != nil {
+		t.Fatalf("DiscoverIPv6 failed: %v", err)
+	}
+	if ip6 != "2001:db8:cafe::1" {
+		t.Fatalf("IPv6 = %q, want 2001:db8:cafe::1", ip6)
+	}
+}

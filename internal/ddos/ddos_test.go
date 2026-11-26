@@ -316,3 +316,82 @@ func TestEvaluateBreachMatrix(t *testing.T) {
 		t.Fatalf("expected ping_loss breach, got %q", r)
 	}
 }
+
+type fakeNotifier struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (n *fakeNotifier) Send(_ context.Context, msg string) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.msgs = append(n.msgs, msg)
+	return nil
+}
+
+func (n *fakeNotifier) Count() int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return len(n.msgs)
+}
+
+func TestEnterShieldNoRedialAlwaysNotifiesWhileRateLimitThrottles(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "shield.lock")
+	store := state.NewStore(filepath.Join(dir, "state.json"))
+	ub := &fakeUbus{}
+	fw := &fakeFirewall{}
+	notifier := &fakeNotifier{}
+
+	now := time.Unix(5000, 0)
+	cfg := &config.Config{
+		NodeName: "edge-test",
+		WAN:      config.WANConfig{IfaceV4: "wan", OverlayIface: "wt0"},
+		DDoSShield: config.DDoSShieldConfig{
+			Enabled:           true,
+			WANIngressPort:    443,
+			MaxRedialsPerHour: 1,
+		},
+	}
+
+	mgr := NewShieldManager(
+		cfg, ub, fakePinger{}, nil, fw, nil, store, notifier,
+		func(context.Context) (string, error) { return "198.51.100.88", nil },
+		nil, lockPath, nil,
+		WithTimings(0, 50*time.Millisecond, time.Millisecond),
+		WithClock(func() time.Time { return now }),
+	)
+
+	// Two consecutive manual --no-redial calls within seconds must BOTH send Telegram notifications
+	// and must not touch the hourly rate-limit notice window.
+	if err := mgr.EnterShield(context.Background(), "manual test 1", EnterOptions{Manual: true, NoRedial: true}); err != nil {
+		t.Fatalf("first --no-redial EnterShield failed: %v", err)
+	}
+	now = now.Add(5 * time.Second)
+	if err := mgr.EnterShield(context.Background(), "manual test 2", EnterOptions{Manual: true, NoRedial: true}); err != nil {
+		t.Fatalf("second --no-redial EnterShield failed: %v", err)
+	}
+	if notifier.Count() != 2 {
+		t.Fatalf("expected 2 Telegram notifications for consecutive --no-redial calls, got %d", notifier.Count())
+	}
+	if ub.downs.Load() != 0 {
+		t.Fatalf("expected no redials with --no-redial, got %d", ub.downs.Load())
+	}
+
+	// Exhaust MaxRedialsPerHour=1 via a normal redial, then trigger 2 rate-limited entries <10m apart.
+	if err := mgr.EnterShield(context.Background(), "auto attack 1", EnterOptions{}); err != nil {
+		t.Fatalf("auto EnterShield 1 failed: %v", err)
+	}
+	if err := mgr.EnterShield(context.Background(), "auto attack 2 (rate-limited)", EnterOptions{}); err != nil {
+		t.Fatalf("auto EnterShield 2 failed: %v", err)
+	}
+	now = now.Add(30 * time.Second)
+	if err := mgr.EnterShield(context.Background(), "auto attack 3 (throttled)", EnterOptions{}); err != nil {
+		t.Fatalf("auto EnterShield 3 failed: %v", err)
+	}
+
+	// Expected total: 2 (--no-redial) + 1 (auto redial 1) + 1 (first rate-limit notice) = 4.
+	if notifier.Count() != 4 {
+		t.Fatalf("expected rate-limit notice to be throttled after 10m window check, got total=%d", notifier.Count())
+	}
+}
