@@ -38,9 +38,10 @@ func run(args []string) error {
 		return runShield(args[1:])
 	case "self-update":
 		return runSelfUpdate(args[1:])
+	case "validate":
+		return runValidate(args[1:])
 	case "version", "--version", "-v":
-		fmt.Printf("cf-edge %s (commit=%s built=%s repo=%s)\n", version, commit, buildDate, githubRepo)
-		return nil
+		return runVersion(args[1:])
 	case "help", "-h", "--help":
 		printUsage()
 		return nil
@@ -56,8 +57,9 @@ func printUsage() {
 Usage:
   cf-edge daemon [-c /etc/cf-edge/config.yaml]
   cf-edge update [-c /etc/cf-edge/config.yaml] [--force]
-  cf-edge status [-c /etc/cf-edge/config.yaml]
+  cf-edge status [-c /etc/cf-edge/config.yaml] [--json]
+  cf-edge validate [-c /etc/cf-edge/config.yaml] [--json]
   cf-edge shield [-c /etc/cf-edge/config.yaml] <enter [--no-redial] | exit | status>
   cf-edge self-update [--check] [--restart] [--version vX.Y.Z] [--repo owner/repo]
-  cf-edge version`)
+  cf-edge version [--json]`)
 }

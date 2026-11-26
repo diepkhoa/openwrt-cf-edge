@@ -28,10 +28,11 @@ chmod 600 /etc/cf-edge/config.yaml
 ```text
 cf-edge daemon [-c /etc/cf-edge/config.yaml]
 cf-edge update [-c /etc/cf-edge/config.yaml] [--force]
-cf-edge status [-c /etc/cf-edge/config.yaml]
+cf-edge status [-c /etc/cf-edge/config.yaml] [--json]
+cf-edge validate [-c /etc/cf-edge/config.yaml] [--json]
 cf-edge shield [-c /etc/cf-edge/config.yaml] <enter [--no-redial] | exit | status>
 cf-edge self-update [--check] [--restart] [--version vX.Y.Z] [--repo owner/repo]
-cf-edge version
+cf-edge version [--json]
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for package structure and build instructions.

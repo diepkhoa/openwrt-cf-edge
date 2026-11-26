@@ -3,6 +3,7 @@ set -eu
 
 REPO="${CF_EDGE_REPO:-diepkhoa/openwrt-cf-edge}"
 VERSION="${CF_EDGE_VERSION:-latest}"
+SKIP_CONFIG="${CF_EDGE_SKIP_CONFIG:-0}"
 BIN_PATH="/usr/bin/cf-edge"
 INIT_PATH="/etc/init.d/cf-edge"
 CONF_DIR="/etc/cf-edge"
@@ -67,7 +68,18 @@ fetch_file() {
 }
 
 ARCH="$(detect_arch)"
-ensure_deps
+
+need_binary=1
+if [ "$VERSION" != "latest" ] && [ -x "${BIN_PATH}" ]; then
+	if "${BIN_PATH}" version 2>/dev/null | grep -q "^cf-edge ${VERSION} "; then
+		log "cf-edge ${VERSION} is already installed at ${BIN_PATH}"
+		need_binary=0
+	fi
+fi
+
+if [ "$need_binary" -eq 1 ] || [ ! -x "${INIT_PATH}" ] || { [ "$SKIP_CONFIG" != "1" ] && [ ! -f "${CONF_PATH}" ]; }; then
+	ensure_deps
+fi
 
 if [ "$VERSION" = "latest" ]; then
 	BASE_URL="https://github.com/${REPO}/releases/latest/download"
@@ -78,21 +90,23 @@ fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-BIN_NAME="cf-edge-linux-${ARCH}"
-log "Downloading ${BIN_NAME} from ${BASE_URL}..."
-fetch_file "${BASE_URL}/${BIN_NAME}" "${TMP_DIR}/${BIN_NAME}"
-fetch_file "${BASE_URL}/checksums.txt" "${TMP_DIR}/checksums.txt"
+if [ "$need_binary" -eq 1 ]; then
+	BIN_NAME="cf-edge-linux-${ARCH}"
+	log "Downloading ${BIN_NAME} from ${BASE_URL}..."
+	fetch_file "${BASE_URL}/${BIN_NAME}" "${TMP_DIR}/${BIN_NAME}"
+	fetch_file "${BASE_URL}/checksums.txt" "${TMP_DIR}/checksums.txt"
 
-log "Verifying SHA256 checksum..."
-(
-	cd "$TMP_DIR"
-	grep " ${BIN_NAME}\$" checksums.txt > target.sha256
-	sha256sum -c target.sha256
-)
+	log "Verifying SHA256 checksum..."
+	(
+		cd "$TMP_DIR"
+		grep " ${BIN_NAME}\$" checksums.txt > target.sha256
+		sha256sum -c target.sha256
+	)
 
-chmod 0755 "${TMP_DIR}/${BIN_NAME}"
-mv "${TMP_DIR}/${BIN_NAME}" "${BIN_PATH}"
-log "Installed binary to ${BIN_PATH}"
+	chmod 0755 "${TMP_DIR}/${BIN_NAME}"
+	mv "${TMP_DIR}/${BIN_NAME}" "${BIN_PATH}"
+	log "Installed binary to ${BIN_PATH}"
+fi
 
 if fetch_file "${BASE_URL}/cf-edge.init" "${TMP_DIR}/cf-edge.init" 2>/dev/null; then
 	chmod 0755 "${TMP_DIR}/cf-edge.init"
@@ -101,7 +115,9 @@ if fetch_file "${BASE_URL}/cf-edge.init" "${TMP_DIR}/cf-edge.init" 2>/dev/null; 
 fi
 
 mkdir -p "${CONF_DIR}"
-if [ ! -f "${CONF_PATH}" ]; then
+if [ "$SKIP_CONFIG" = "1" ]; then
+	log "Skipping starter config (CF_EDGE_SKIP_CONFIG=1)"
+elif [ ! -f "${CONF_PATH}" ]; then
 	if fetch_file "${BASE_URL}/config.example.yaml" "${TMP_DIR}/config.example.yaml" 2>/dev/null; then
 		chmod 0600 "${TMP_DIR}/config.example.yaml"
 		mv "${TMP_DIR}/config.example.yaml" "${CONF_PATH}"
