@@ -39,6 +39,7 @@ type statusReport struct {
 func runStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	cfgPath := fs.String("c", defaultConfigPath, "path to config.yaml")
+	jsonOut := fs.Bool("json", false, "output status as JSON")
 	if err := fs.Parse(reorderFlags(args)); err != nil {
 		return err
 	}
@@ -67,6 +68,9 @@ func runStatus(args []string) error {
 	rep.NftActive, _ = deps.firewall.IsActive(ctx)
 	rep.UbusStatus, rep.UbusErr = deps.ubusClient.Status(ctx, deps.cfg.WAN.IfaceV4)
 
+	if *jsonOut {
+		return renderStatusJSON(os.Stdout, rep)
+	}
 	renderStatus(os.Stdout, rep)
 	return nil
 }

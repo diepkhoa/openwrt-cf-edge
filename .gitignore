@@ -6,9 +6,11 @@
 *.test
 *.out
 
-# Local secrets & runtime artifacts
+# Local secrets, planning docs, private Ansible infra & runtime artifacts
 config.yaml
 *.local.yaml
+PLAN_*.md
+/openwrt-infra/
 *.log
 .DS_Store
 Thumbs.db
