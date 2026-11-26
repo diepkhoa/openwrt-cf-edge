@@ -166,12 +166,12 @@ func (m *ShieldManager) EnterShield(ctx context.Context, reason string, opts Ent
 		return fmt.Errorf("apply nft shield: %w", err)
 	}
 
-	redialSkipped := opts.NoRedial
+	rateLimited := false
 	redialNote := "redial skipped (--no-redial)"
 	if !opts.NoRedial {
 		allowed, count := m.consumeRedialQuota()
 		if !allowed {
-			redialSkipped = true
+			rateLimited = true
 			redialNote = fmt.Sprintf("redial skipped (hourly limit %d/%d reached)", count, m.cfg.DDoSShield.MaxRedialsPerHour)
 			m.logger.Warn("max_redials_per_hour exceeded; keeping shield.lock + nft without redialing", "count", count)
 		} else {
@@ -197,7 +197,7 @@ func (m *ShieldManager) EnterShield(ctx context.Context, reason string, opts Ent
 		}
 	}
 
-	if m.notifier != nil && (!redialSkipped || m.shouldSendRateLimitNotice()) {
+	if m.notifier != nil && (!rateLimited || m.shouldSendRateLimitNotice()) {
 		detail := fmt.Sprintf("%s (%s)", workerStatus, redialNote)
 		msg := notify.FormatShieldEntered(m.cfg.NodeName, reason, newIP, detail)
 		if err := m.notifier.Send(ctx, msg); err != nil {

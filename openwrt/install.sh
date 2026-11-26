@@ -24,17 +24,25 @@ detect_arch() {
 }
 
 ensure_tls_certs() {
+	has_ca=0
 	if [ -f /etc/ssl/certs/ca-certificates.crt ] || [ -f /etc/ssl/cert.pem ]; then
+		has_ca=1
+	fi
+	has_tls=0
+	if [ -e /lib/libustream-ssl.so ] || [ -e /usr/lib/libustream-ssl.so ]; then
+		has_tls=1
+	fi
+	if [ "$has_ca" -eq 1 ] && [ "$has_tls" -eq 1 ]; then
 		return 0
 	fi
 	if command -v apk >/dev/null 2>&1; then
-		log "Installing ca-bundle via apk..."
+		log "Installing TLS dependencies (ca-bundle, libustream-mbedtls) via apk..."
 		apk update >/dev/null 2>&1 || true
-		apk add ca-bundle >/dev/null 2>&1 || true
+		apk add ca-bundle libustream-mbedtls >/dev/null 2>&1 || true
 	elif command -v opkg >/dev/null 2>&1; then
-		log "Installing ca-bundle via opkg..."
+		log "Installing TLS dependencies (ca-bundle, libustream-mbedtls) via opkg..."
 		opkg update >/dev/null 2>&1 || true
-		opkg install ca-bundle >/dev/null 2>&1 || true
+		opkg install ca-bundle libustream-mbedtls >/dev/null 2>&1 || true
 	fi
 }
 
@@ -42,9 +50,9 @@ fetch_file() {
 	url="$1"
 	dest="$2"
 	if command -v uclient-fetch >/dev/null 2>&1; then
-		uclient-fetch -q -O "$dest" "$url"
+		uclient-fetch -T 90 -q -O "$dest" "$url" || uclient-fetch -4 -T 90 -q -O "$dest" "$url"
 	elif command -v wget >/dev/null 2>&1; then
-		wget -q -O "$dest" "$url"
+		wget -T 90 -q -O "$dest" "$url" || wget -4 -T 90 -q -O "$dest" "$url"
 	else
 		log "Error: neither uclient-fetch nor wget is available"
 		exit 1
