@@ -26,6 +26,7 @@ type RuntimeState struct {
 	CFProxyCache  *CFProxyIPCache        `json:"cf_proxy_cache,omitempty"`
 	RedialHistory []time.Time            `json:"redial_history,omitempty"`
 	PPPoEStatus   *PPPoERuntimeInfo      `json:"pppoe_status,omitempty"`
+	PendingNotify []string               `json:"pending_notify,omitempty"`
 }
 
 // RecordState caches the Cloudflare DNS record ID and last pushed IP per subdomain/type.
@@ -204,6 +205,9 @@ func (st RuntimeState) clone() RuntimeState {
 	if st.PPPoEStatus != nil {
 		cp := *st.PPPoEStatus
 		out.PPPoEStatus = &cp
+	}
+	if st.PendingNotify != nil {
+		out.PendingNotify = append([]string(nil), st.PendingNotify...)
 	}
 	return out
 }

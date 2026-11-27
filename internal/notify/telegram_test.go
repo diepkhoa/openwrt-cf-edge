@@ -131,3 +131,28 @@ func TestTelegramSendRetriesTransientErrors(t *testing.T) {
 		t.Fatalf("attempts = %d, want 3", attempts.Load())
 	}
 }
+
+func TestFormatDDNSUpdateGroupsHostsAndSortsTypes(t *testing.T) {
+	single := FormatDDNSUpdate("knr3053", "42.118.213.53", "2405:4803::1", []string{
+		"test.com (AAAA)",
+		"test.com (A)",
+		"test.com (A)",
+	})
+	if !strings.Contains(single, "• <b>Host:</b> <code>test.com (A, AAAA)</code>") {
+		t.Fatalf("expected grouped single host line, got:\n%s", single)
+	}
+	if strings.Count(single, "test.com") != 1 {
+		t.Fatalf("expected test.com mentioned only once, got:\n%s", single)
+	}
+
+	multi := FormatDDNSUpdate("knr3053", "42.118.213.53", "", []string{
+		"test.com (A)",
+		"wg.com (AAAA)",
+		"test.com (AAAA)",
+	})
+	if !strings.Contains(multi, "• <b>Hosts:</b>") ||
+		!strings.Contains(multi, "<code>test.com (A, AAAA)</code>") ||
+		!strings.Contains(multi, "<code>wg.com (AAAA)</code>") {
+		t.Fatalf("unexpected multi-host formatting:\n%s", multi)
+	}
+}

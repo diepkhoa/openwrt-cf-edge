@@ -133,6 +133,9 @@ func (u *Updater) Sync(ctx context.Context, snap ipwatch.Snapshot, opts SyncOpti
 	currentState := u.store.Get()
 	if !opts.Force && u.allTasksSynced(currentState, tasks) {
 		u.logger.Debug("all DNS records already match state", "ipv4", snap.IPv4, "ipv6", snap.IPv6)
+		if len(currentState.PendingNotify) > 0 && u.notifier != nil {
+			u.flushDDNSNotification(ctx, snap, nil)
+		}
 		return nil
 	}
 
@@ -209,11 +212,8 @@ func (u *Updater) Sync(ctx context.Context, snap ipwatch.Snapshot, opts SyncOpti
 		u.lastNormalSync = time.Now()
 	}
 
-	if len(updatedLabels) > 0 && u.notifier != nil {
-		msg := notify.FormatDDNSUpdate(u.cfg.NodeName, snap.IPv4, snap.IPv6, updatedLabels)
-		if err := u.notifier.Send(ctx, msg); err != nil {
-			u.logger.Warn("failed to send Telegram notification", "err", err)
-		}
+	if (len(updatedLabels) > 0 || len(u.store.Get().PendingNotify) > 0) && u.notifier != nil {
+		u.flushDDNSNotification(ctx, snap, updatedLabels)
 	}
 
 	return lastErr
