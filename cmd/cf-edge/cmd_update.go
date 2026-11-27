@@ -29,6 +29,10 @@ func runUpdate(args []string) error {
 	if err != nil {
 		return err
 	}
+	if !deps.cfg.Cloudflare.Enabled {
+		fmt.Println("Cloudflare DDNS is disabled (cloudflare.enabled: false); skipping update")
+		return nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

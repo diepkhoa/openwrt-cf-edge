@@ -35,6 +35,7 @@ func newTestConfig() *config.Config {
 	return &config.Config{
 		NodeName: "x96air",
 		Cloudflare: config.CloudflareConfig{
+			Enabled:  true,
 			ZoneID:   "zone-1",
 			APIToken: "secret",
 			Records: []config.RecordConfig{

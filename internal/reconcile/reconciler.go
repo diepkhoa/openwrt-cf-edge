@@ -80,7 +80,7 @@ func NewReconciler(
 
 // Run waits for the initial startup delay, then reconciles DNS every reconcile.interval.
 func (r *Reconciler) Run(ctx context.Context) {
-	if !r.cfg.Reconcile.Enabled {
+	if !r.cfg.Cloudflare.Enabled || !r.cfg.Reconcile.Enabled {
 		return
 	}
 

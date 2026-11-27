@@ -32,6 +32,7 @@ type statusJSON struct {
 }
 
 type statusFeaturesJSON struct {
+	DDNS              bool   `json:"ddns"`
 	IPv6DDNS          bool   `json:"ipv6_ddns"`
 	Reconcile         bool   `json:"reconcile"`
 	ReconcileInterval string `json:"reconcile_interval"`
@@ -72,15 +73,14 @@ func renderStatusJSON(w io.Writer, rep statusReport) error {
 	cfg := rep.Cfg
 
 	out := statusJSON{
-		OS:         rep.OS,
-		Version:    rep.Version,
-		Node:       cfg.NodeName,
-		StateFile:  rep.StateFile,
-		CachedIPv4: st.LastIPv4,
-		CachedIPv6: st.LastIPv6,
+		OS:        rep.OS,
+		Version:   rep.Version,
+		Node:      cfg.NodeName,
+		StateFile: rep.StateFile,
 		Features: statusFeaturesJSON{
+			DDNS:              cfg.Cloudflare.Enabled,
 			IPv6DDNS:          cfg.NeedsIPv6(),
-			Reconcile:         cfg.Reconcile.Enabled,
+			Reconcile:         cfg.Cloudflare.Enabled && cfg.Reconcile.Enabled,
 			ReconcileInterval: cfg.Reconcile.Interval.Std().String(),
 			PPPoEGuard:        cfg.PPPoEGuard.Enabled,
 			DDoSShield:        cfg.DDoSShield.Enabled,
@@ -101,11 +101,15 @@ func renderStatusJSON(w io.Writer, rep statusReport) error {
 		PPPoE: statusPPPoEJSON{
 			Iface: cfg.WAN.IfaceV4,
 		},
-		Records: make([]state.RecordState, 0, len(st.Records)),
+		Records: make([]state.RecordState, 0),
 	}
 
-	if !st.LastUpdated.IsZero() {
-		out.LastSync = st.LastUpdated.UTC().Format(time.RFC3339)
+	if cfg.Cloudflare.Enabled {
+		out.CachedIPv4 = st.LastIPv4
+		out.CachedIPv6 = st.LastIPv6
+		if !st.LastUpdated.IsZero() {
+			out.LastSync = st.LastUpdated.UTC().Format(time.RFC3339)
+		}
 	}
 	if rep.LiveIPv4Err == nil {
 		out.LiveIPv4 = rep.LiveIPv4
@@ -148,13 +152,15 @@ func renderStatusJSON(w io.Writer, rep statusReport) error {
 		out.PPPoE.GuardLastAction = st.PPPoEStatus.LastAction
 	}
 
-	keys := make([]string, 0, len(st.Records))
-	for k := range st.Records {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		out.Records = append(out.Records, st.Records[k])
+	if cfg.Cloudflare.Enabled {
+		keys := make([]string, 0, len(st.Records))
+		for k := range st.Records {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			out.Records = append(out.Records, st.Records[k])
+		}
 	}
 
 	enc := json.NewEncoder(w)

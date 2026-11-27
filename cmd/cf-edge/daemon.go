@@ -73,6 +73,9 @@ func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
 			return ip, err
 		},
 		func(ctx context.Context) error {
+			if !cfg.Cloudflare.Enabled {
+				return nil
+			}
 			snap, err := discoverer.Discover(ctx)
 			if err != nil {
 				return err
@@ -172,6 +175,9 @@ func runDaemon(args []string) error {
 				return ip, err
 			},
 			func(ctx context.Context) error {
+				if !deps.cfg.Cloudflare.Enabled {
+					return nil
+				}
 				snap, err := deps.discoverer.Discover(ctx)
 				if err != nil {
 					return err
@@ -190,6 +196,7 @@ func runDaemon(args []string) error {
 	logger.Info("starting cf-edge daemon",
 		"node", deps.cfg.NodeName,
 		"version", version,
+		"ddns", deps.cfg.Cloudflare.Enabled,
 		"reconcile", deps.cfg.Reconcile.Enabled,
 		"pppoe_guard", deps.cfg.PPPoEGuard.Enabled,
 		"ddos_shield", deps.cfg.DDoSShield.Enabled,
@@ -209,9 +216,11 @@ func runDaemon(args []string) error {
 	}
 
 	start("ubus.Listener", listener.Run)
-	start("ipwatch.Watcher", watcher.Run)
-	if deps.cfg.Reconcile.Enabled {
-		start("reconcile.Reconciler", reconciler.Run)
+	if deps.cfg.Cloudflare.Enabled {
+		start("ipwatch.Watcher", watcher.Run)
+		if deps.cfg.Reconcile.Enabled {
+			start("reconcile.Reconciler", reconciler.Run)
+		}
 	}
 	if pppoeGuard != nil {
 		start("pppoeguard.Guard", pppoeGuard.Run)

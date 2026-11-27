@@ -63,6 +63,7 @@ func testConfig(ipv6 bool) *config.Config {
 			IfaceV6: "wan6",
 		},
 		Cloudflare: config.CloudflareConfig{
+			Enabled: true,
 			Records: []config.RecordConfig{{
 				Subdomain: "node.example.com",
 				IPv4:      true,

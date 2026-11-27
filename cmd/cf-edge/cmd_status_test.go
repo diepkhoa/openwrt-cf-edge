@@ -17,6 +17,7 @@ func TestRenderStatusIncludesVersionAndDisabledFeaturesAsFalse(t *testing.T) {
 		NodeName: "knr3053",
 		WAN:      config.WANConfig{IfaceV4: "wan"},
 		Cloudflare: config.CloudflareConfig{
+			Enabled: true,
 			Records: []config.RecordConfig{{Subdomain: "test.example.com", IPv4: true, IPv6: false}},
 		},
 		Reconcile:  config.ReconcileConfig{Enabled: false},
@@ -64,6 +65,7 @@ func TestRenderStatusEnabledAutoUpdateAndFeatures(t *testing.T) {
 		NodeName: "knr3053",
 		WAN:      config.WANConfig{IfaceV4: "wan"},
 		Cloudflare: config.CloudflareConfig{
+			Enabled: true,
 			Records: []config.RecordConfig{{Subdomain: "test.example.com", IPv4: true, IPv6: true}},
 		},
 		Reconcile:  config.ReconcileConfig{Enabled: true, Interval: config.Duration(10 * time.Minute)},
@@ -103,6 +105,7 @@ func TestRenderStatusJSON(t *testing.T) {
 		NodeName: "edge-main",
 		WAN:      config.WANConfig{IfaceV4: "wan"},
 		Cloudflare: config.CloudflareConfig{
+			Enabled: true,
 			Records: []config.RecordConfig{{Subdomain: "wg.example.com", IPv4: true, IPv6: false}},
 		},
 		Reconcile:  config.ReconcileConfig{Enabled: true, Interval: config.Duration(10 * time.Minute)},
@@ -145,10 +148,61 @@ func TestRenderStatusJSON(t *testing.T) {
 	if decoded.Version != "v0.1.5" || !decoded.Shield.Active || !decoded.Shield.NftActive {
 		t.Fatalf("unexpected shield/version JSON: %+v", decoded)
 	}
-	if !decoded.Features.DDoSShield || decoded.Features.AutoUpdate || decoded.Features.IPv6DDNS {
+	if !decoded.Features.DDNS || !decoded.Features.DDoSShield || decoded.Features.AutoUpdate || decoded.Features.IPv6DDNS {
 		t.Fatalf("unexpected features JSON: %+v", decoded.Features)
 	}
 	if len(decoded.Records) != 1 || decoded.Records[0].RecordID != "rid-1" || !decoded.PPPoE.Up {
 		t.Fatalf("unexpected records/pppoe JSON: %+v", decoded)
+	}
+}
+
+func TestRenderStatusHidesDDNSAndReconcileWhenCloudflareDisabled(t *testing.T) {
+	cfg := &config.Config{
+		NodeName:   "router-no-ddns",
+		WAN:        config.WANConfig{IfaceV4: "wan"},
+		Cloudflare: config.CloudflareConfig{Enabled: false},
+		Reconcile:  config.ReconcileConfig{Enabled: false},
+	}
+
+	rep := statusReport{
+		OS:        "linux/arm64",
+		Version:   "v0.1.9",
+		Cfg:       cfg,
+		StateFile: "/tmp/cf-edge-state.json",
+		LiveIPv4:  "1.54.4.207",
+		LiveL3Dev: "pppoe-wan",
+		State: state.RuntimeState{
+			LastIPv4:    "1.54.4.207",
+			LastUpdated: time.Unix(1700000000, 0),
+			Records: map[string]state.RecordState{
+				"old.example.com|A": {Subdomain: "old.example.com", Type: "A", IP: "1.54.4.207"},
+			},
+		},
+	}
+
+	var txt bytes.Buffer
+	renderStatus(&txt, rep)
+	out := txt.String()
+	for _, want := range []string{"DDNS:          false", "Reconcile:     false"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in output:\n%s", want, out)
+		}
+	}
+	for _, hidden := range []string{"Cached IPv4", "Last Sync", "IPv6 DDNS", "DNS Records", "old.example.com"} {
+		if strings.Contains(out, hidden) {
+			t.Fatalf("expected %q hidden when cloudflare disabled, got:\n%s", hidden, out)
+		}
+	}
+
+	var js bytes.Buffer
+	if err := renderStatusJSON(&js, rep); err != nil {
+		t.Fatal(err)
+	}
+	var decoded statusJSON
+	if err := json.Unmarshal(js.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Features.DDNS || decoded.Features.Reconcile || decoded.CachedIPv4 != "" || len(decoded.Records) != 0 {
+		t.Fatalf("expected DDNS/Reconcile/records disabled in JSON, got %+v", decoded)
 	}
 }
