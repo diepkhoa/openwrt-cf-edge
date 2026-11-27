@@ -4,10 +4,10 @@
 node_name: "x96air" # Defaults to os.Hostname() if omitted
 
 wan:
-  iface_v4: "wan"
-  iface_v6: "wan6"       # Leave empty if node does not use a separate IPv6 interface
-  overlay_iface: "wt0"   # NetBird/WireGuard overlay interface (used by DDoS detector)
-  lan_iface: ""          # Optional: e.g. "br-lan" to subtract TX_LAN from Junk_Mbps
+  iface_v4: "wan"          # OpenWrt logical interface name for IPv4 WAN (ubus network.interface.<name>)
+  iface_v6: "wan6"         # Leave empty if node does not use a separate IPv6 interface
+  overlay_iface: "wt0"     # NetBird/WireGuard overlay device (required by ddos_shield; excluded from WAN firewall)
+  lan_iface: "br-lan"      # Optional: L3 bridge for IPv6 PD fallback, Junk_Mbps TX_LAN subtraction & WAN exclusion
 
 cloudflare:
   zone_id: "your-zone-id"
@@ -51,39 +51,40 @@ ddos_shield:
   status_poll_interval: "2m"
 
 # Optional: OpenWrt 25.12 fw4-native GeoIP + rate-limit firewall (table inet cf_edge_fw)
+# Inspects WAN ingress only (iifname != WAN_devs return); LAN/br-lan/wt0/lo & outbound traffic are never blocked.
 edge_firewall:
-  enabled: false
-  refresh_interval: "168h"                   # Refresh GeoIP/Cloudflare ranges weekly
-  cache_path: "/etc/cf-edge/geoip-cache.json"
-  wan_devices: []                            # Optional override; empty = auto-resolve via ubus
-  geoip_countries: ["vn"]
-  include_cloudflare: true
-  allow_cidrs: []
-  drop_invalid_tcp: true
-  drop_ip_options_tcp: false
-  allow_ssh_port: false
-  rollback_on_check_fail: true
-  health_check_tcp: ["1.1.1.1:443", "8.8.8.8:443"]
-  health_check_udp: ["1.1.1.1:53", "8.8.8.8:53"]
-  health_check_internal_tcp: []              # Optional LAN/NetBird peer checks, e.g. ["192.168.1.10:22"]
+  enabled: false                             # Set true on edge router to apply rules automatically on startup/ifup
+  refresh_interval: "168h"                   # How often to re-download GeoIP & Cloudflare IP sets (168h = 7 days, flash-friendly)
+  cache_path: "/etc/cf-edge/geoip-cache.json" # Persistent GeoIP cache (~20KB) for instant boot protection
+  wan_devices: []                            # Optional L3 override (e.g. ["eth0"] on standard Linux); empty = auto-resolve via ubus
+  geoip_countries: ["vn"]                    # Allowed ISO-3166 alpha-2 country codes from ipdeny.com (e.g. ["vn", "sg"])
+  include_cloudflare: true                   # Merge official Cloudflare IPv4 & IPv6 ranges into allowed GeoIP sets
+  allow_cidrs: []                            # Extra trusted source IPv4/IPv6 CIDRs always allowed past GeoIP checks
+  drop_invalid_tcp: true                     # Drop malformed TCP packets (ct invalid, NULL/XMAS/SYN+FIN/SYN+RST) on TCP rule ports
+  drop_ip_options_tcp: false                 # Optional: drop all WAN ingress IPv4 TCP packets with ip hdrlength > 5 (IP options)
+  allow_ssh_port: false                      # Config safety guard: rejects port 22 in rules below unless explicitly set true
+  rollback_on_check_fail: true               # Auto-rollback if post-apply outbound TCP, outbound UDP, or internal checks fail
+  health_check_tcp: ["1.1.1.1:443", "8.8.8.8:443"] # Outbound TCP probes tested before & immediately after applying nft rules
+  health_check_udp: ["1.1.1.1:53", "8.8.8.8:53"]   # Outbound UDP round-trip DNS probes tested before & after applying rules
+  health_check_internal_tcp: []              # Optional LAN/NetBird peer TCP targets to verify (e.g. ["192.168.1.10:443"])
   rules:
-    - name: "haproxy_https"
-      chain: "input"
-      proto: "tcp"
-      ports: [443]
-      geoip_enforce: true
-      global_pps: 30000
-      global_burst: 5000
-      per_ip_pps: 26000
-      per_ip_burst: 5000
-      max_conns_per_ip: 80
-      syn_rate_per_ip: 25
-      syn_burst: 100
+    - name: "haproxy_https"                  # Unique rule identifier (lowercase a-z, 0-9, _; used in nft chain/set names)
+      chain: "input"                         # "input" = service running on the router itself; "forward" = port-forwarded to LAN host
+      proto: "tcp"                           # Protocol: "tcp" or "udp"
+      ports: [443]                           # Protected destination port(s), e.g. [80, 443]
+      geoip_enforce: true                    # If true, drop non-GeoIP/Cloudflare IPs statelessly at prerouting_raw (-300)
+      global_pps: 30000                      # Total packet/sec cap across all IPs on these port(s) (0 = disabled)
+      global_burst: 5000                     # Burst allowance for global_pps before dropping excess packets
+      per_ip_pps: 26000                      # Per-source-IP packet/sec cap using fw4 dynamic set (0 = disabled)
+      per_ip_burst: 5000                     # Burst allowance for per_ip_pps
+      max_conns_per_ip: 80                   # TCP only: max concurrent connections per IP via dynamic ct count (0 = disabled)
+      syn_rate_per_ip: 25                    # TCP only: max new SYN packets/sec per IP to mitigate SYN floods (0 = disabled)
+      syn_burst: 100                         # TCP only: burst allowance for syn_rate_per_ip
     - name: "livekit_webrtc"
-      chain: "forward"
+      chain: "forward"                       # Protects UDP traffic forwarded through router to an internal LAN/Proxmox server
       proto: "udp"
       ports: [50044]
-      geoip_enforce: true
+      geoip_enforce: true                    # Set false if international WebRTC peers connect directly without TURN
       global_pps: 15000
       global_burst: 2000
       per_ip_pps: 5000
@@ -92,8 +93,8 @@ edge_firewall:
 # Optional: Check GitHub Releases once per day at a custom local time (24h "HH:MM")
 auto_update:
   enabled: false
-  time: "03:30"
-  restart: true
+  time: "03:30"                              # Local wall-clock time on the router
+  restart: true                              # Scheduled daemon update: whether to restart /etc/init.d/cf-edge automatically
 
 telegram:
   enabled: false
