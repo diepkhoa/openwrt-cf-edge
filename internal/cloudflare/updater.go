@@ -120,6 +120,9 @@ func (u *Updater) Sync(ctx context.Context, snap ipwatch.Snapshot, opts SyncOpti
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
+	if !u.cfg.Cloudflare.Enabled {
+		return nil
+	}
 	if state.IsShielded(u.shieldLockPath) {
 		return ErrShielded
 	}

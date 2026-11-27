@@ -133,6 +133,7 @@ func TestReconcilerBehavior(t *testing.T) {
 	cfg := &config.Config{
 		NodeName: "x96air",
 		Cloudflare: config.CloudflareConfig{
+			Enabled: true,
 			Records: []config.RecordConfig{
 				{Subdomain: "proxied.example.com", IPv4: true, Proxied: true},
 				{Subdomain: "healthy.example.com", IPv4: true, Proxied: false},

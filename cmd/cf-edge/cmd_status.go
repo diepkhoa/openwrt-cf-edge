@@ -86,10 +86,12 @@ func renderStatus(w io.Writer, rep statusReport) {
 	fmt.Fprintf(w, "Version:       %s\n", rep.Version)
 	fmt.Fprintf(w, "Node:          %s\n", cfg.NodeName)
 	fmt.Fprintf(w, "State File:    %s\n", rep.StateFile)
-	fmt.Fprintf(w, "Cached IPv4:   %s\n", valueOrDash(st.LastIPv4))
-	fmt.Fprintf(w, "Cached IPv6:   %s\n", valueOrDash(st.LastIPv6))
-	if !st.LastUpdated.IsZero() {
-		fmt.Fprintf(w, "Last Sync:     %s\n", st.LastUpdated.Local().Format(time.RFC3339))
+	if cfg.Cloudflare.Enabled {
+		fmt.Fprintf(w, "Cached IPv4:   %s\n", valueOrDash(st.LastIPv4))
+		fmt.Fprintf(w, "Cached IPv6:   %s\n", valueOrDash(st.LastIPv6))
+		if !st.LastUpdated.IsZero() {
+			fmt.Fprintf(w, "Last Sync:     %s\n", st.LastUpdated.Local().Format(time.RFC3339))
+		}
 	}
 
 	if rep.LiveIPv4Err == nil {
@@ -97,18 +99,23 @@ func renderStatus(w io.Writer, rep statusReport) {
 	} else {
 		fmt.Fprintf(w, "Live WAN IPv4: unavailable (%v)\n", rep.LiveIPv4Err)
 	}
-	if cfg.NeedsIPv6() {
-		if rep.LiveIPv6Err == nil {
-			fmt.Fprintf(w, "Live WAN IPv6: %s\n", rep.LiveIPv6)
+	if cfg.Cloudflare.Enabled {
+		if cfg.NeedsIPv6() {
+			if rep.LiveIPv6Err == nil {
+				fmt.Fprintf(w, "Live WAN IPv6: %s\n", rep.LiveIPv6)
+			} else {
+				fmt.Fprintf(w, "Live WAN IPv6: unavailable (%v)\n", rep.LiveIPv6Err)
+			}
 		} else {
-			fmt.Fprintf(w, "Live WAN IPv6: unavailable (%v)\n", rep.LiveIPv6Err)
+			fmt.Fprintln(w, "Live WAN IPv6: false (disabled)")
 		}
+		fmt.Fprintf(w, "DDNS:          true (records=%d)\n", len(cfg.Cloudflare.Records))
+		fmt.Fprintf(w, "IPv6 DDNS:     %v\n", cfg.NeedsIPv6())
 	} else {
-		fmt.Fprintln(w, "Live WAN IPv6: false (disabled)")
+		fmt.Fprintln(w, "DDNS:          false")
 	}
 
-	fmt.Fprintf(w, "IPv6 DDNS:     %v\n", cfg.NeedsIPv6())
-	if cfg.Reconcile.Enabled {
+	if cfg.Cloudflare.Enabled && cfg.Reconcile.Enabled {
 		fmt.Fprintf(w, "Reconcile:     true (interval=%s)\n", cfg.Reconcile.Interval.Std())
 	} else {
 		fmt.Fprintln(w, "Reconcile:     false")
@@ -140,7 +147,7 @@ func renderStatus(w io.Writer, rep statusReport) {
 			cfg.WAN.IfaceV4, rep.UbusStatus.Up, rep.UbusStatus.Pending, valueOrDash(rep.UbusStatus.EffectiveL3Device()), rep.UbusStatus.Uptime, errSummary)
 	}
 
-	if len(st.Records) > 0 {
+	if cfg.Cloudflare.Enabled && len(st.Records) > 0 {
 		fmt.Fprintln(w, "DNS Records:")
 		keys := make([]string, 0, len(st.Records))
 		for k := range st.Records {

@@ -10,6 +10,7 @@ wan:
   lan_iface: "br-lan"      # Optional: L3 bridge for IPv6 PD fallback, Junk_Mbps TX_LAN subtraction & WAN exclusion
 
 cloudflare:
+  enabled: true            # Set false to disable DDNS + Reconcile completely (zone_id/api_token/records become optional)
   zone_id: "your-zone-id"
   api_token: "your-dns-edit-token" # Scoped to Zone:DNS:Edit only
   records:

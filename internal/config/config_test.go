@@ -91,6 +91,9 @@ cloudflare:
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
+	if !cfg.Cloudflare.Enabled {
+		t.Fatal("Cloudflare.Enabled should default to true")
+	}
 	if cfg.NodeName == "" {
 		t.Fatal("NodeName should default to hostname or openwrt")
 	}
@@ -223,6 +226,27 @@ auto_update:
 	}
 	if !parsedAU.AutoUpdate.Enabled || parsedAU.AutoUpdate.Time != "04:05" || parsedAU.AutoUpdate.Restart {
 		t.Fatalf("unexpected parsed auto_update: %+v", parsedAU.AutoUpdate)
+	}
+
+	// When cloudflare.enabled=false, zone/token/records are optional and reconcile cascades to false.
+	noDDNS, err := Parse([]byte(`
+cloudflare:
+  enabled: false
+reconcile:
+  enabled: true
+edge_firewall:
+  enabled: true
+  rules:
+    - name: web
+      chain: input
+      proto: tcp
+      ports: [443]
+`))
+	if err != nil {
+		t.Fatalf("expected valid config with cloudflare.enabled=false, got: %v", err)
+	}
+	if noDDNS.Cloudflare.Enabled || noDDNS.Reconcile.Enabled || noDDNS.NeedsIPv6() {
+		t.Fatalf("expected DDNS, Reconcile, and IPv6 DDNS disabled, got cf=%v rec=%v", noDDNS.Cloudflare.Enabled, noDDNS.Reconcile.Enabled)
 	}
 
 	for _, tc := range cases {

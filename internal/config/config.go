@@ -110,6 +110,7 @@ type WANConfig struct {
 
 // CloudflareConfig defines Cloudflare DNS zone credentials and managed subdomains.
 type CloudflareConfig struct {
+	Enabled  bool           `yaml:"enabled"`
 	ZoneID   string         `yaml:"zone_id"`
 	APIToken string         `yaml:"api_token"`
 	Records  []RecordConfig `yaml:"records"`
@@ -160,8 +161,11 @@ type TelegramConfig struct {
 	ChatID   string `yaml:"chat_id"`
 }
 
-// NeedsIPv6 returns true when at least one configured DNS record has IPv6 enabled.
+// NeedsIPv6 returns true when Cloudflare DDNS is enabled and at least one record uses IPv6.
 func (c *Config) NeedsIPv6() bool {
+	if !c.Cloudflare.Enabled {
+		return false
+	}
 	for _, rec := range c.Cloudflare.Records {
 		if rec.IPv6 {
 			return true

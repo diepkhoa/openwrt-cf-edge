@@ -16,6 +16,9 @@ func defaultConfig() Config {
 		WAN: WANConfig{
 			IfaceV4: "wan",
 		},
+		Cloudflare: CloudflareConfig{
+			Enabled: true,
+		},
 		Reconcile: ReconcileConfig{
 			Enabled:   true,
 			Interval:  Duration(10 * time.Minute),
@@ -85,6 +88,10 @@ func (c *Config) normalizeAndValidate() error {
 func (c *Config) validateCloudflare() error {
 	c.Cloudflare.ZoneID = strings.TrimSpace(c.Cloudflare.ZoneID)
 	c.Cloudflare.APIToken = strings.TrimSpace(c.Cloudflare.APIToken)
+	if !c.Cloudflare.Enabled {
+		c.Reconcile.Enabled = false
+		return nil
+	}
 	if c.Cloudflare.ZoneID == "" {
 		return errors.New("cloudflare.zone_id must not be empty")
 	}
@@ -114,6 +121,10 @@ func (c *Config) validateCloudflare() error {
 }
 
 func (c *Config) validateReconcile() error {
+	if !c.Cloudflare.Enabled {
+		c.Reconcile.Enabled = false
+		return nil
+	}
 	if !c.Reconcile.Enabled {
 		return nil
 	}
