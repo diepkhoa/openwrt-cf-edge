@@ -67,6 +67,9 @@ func TestBuildShieldScriptUsesIifnameAndIngressOnly(t *testing.T) {
 	if !strings.Contains(script, "tcp dport 443 drop") || !strings.Contains(script, "udp dport 443 drop") {
 		t.Fatalf("missing tcp/udp dport 443 drop rules:\n%s", script)
 	}
+	if !strings.Contains(script, "priority -20") {
+		t.Fatalf("expected cf_edge_shield priority -20 ahead of edge_firewall (-10/-5), got:\n%s", script)
+	}
 }
 
 type fakeUbus struct {

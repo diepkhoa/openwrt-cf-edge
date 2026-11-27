@@ -109,6 +109,11 @@ cloudflare:
 	if cfg.AutoUpdate.Enabled || cfg.AutoUpdate.Time != "03:30" || !cfg.AutoUpdate.Restart {
 		t.Fatalf("unexpected auto_update defaults: %+v", cfg.AutoUpdate)
 	}
+	if cfg.EdgeFirewall.Enabled || cfg.EdgeFirewall.RefreshInterval.Std() != 7*24*time.Hour ||
+		cfg.EdgeFirewall.CachePath != DefaultGeoIPCachePath || !cfg.EdgeFirewall.IncludeCloudflare ||
+		!cfg.EdgeFirewall.RollbackOnCheckFail {
+		t.Fatalf("unexpected edge_firewall defaults: %+v", cfg.EdgeFirewall)
+	}
 }
 
 func TestLoadFromFile(t *testing.T) {
@@ -181,6 +186,21 @@ func TestParseValidationErrors(t *testing.T) {
 			name: "auto_update invalid time",
 			yaml: "cloudflare:\n  zone_id: z\n  api_token: t\n  records:\n    - subdomain: a.b\n      ipv4: true\nauto_update:\n  enabled: true\n  time: \"25:99\"",
 			want: "auto_update.time",
+		},
+		{
+			name: "edge_firewall forbidden br-lan wan_devices",
+			yaml: "wan:\n  lan_iface: br-lan\n  overlay_iface: wt0\ncloudflare:\n  zone_id: z\n  api_token: t\n  records:\n    - subdomain: a.b\n      ipv4: true\nedge_firewall:\n  enabled: true\n  wan_devices: [\"br-lan\"]\n  rules:\n    - name: web\n      chain: input\n      proto: tcp\n      ports: [443]",
+			want: "edge_firewall.wan_devices",
+		},
+		{
+			name: "edge_firewall port 22 blocked by default",
+			yaml: "cloudflare:\n  zone_id: z\n  api_token: t\n  records:\n    - subdomain: a.b\n      ipv4: true\nedge_firewall:\n  enabled: true\n  rules:\n    - name: ssh\n      chain: input\n      proto: tcp\n      ports: [22]",
+			want: "port 22",
+		},
+		{
+			name: "edge_firewall udp with max_conns_per_ip rejected",
+			yaml: "cloudflare:\n  zone_id: z\n  api_token: t\n  records:\n    - subdomain: a.b\n      ipv4: true\nedge_firewall:\n  enabled: true\n  rules:\n    - name: rtc\n      chain: forward\n      proto: udp\n      ports: [50044]\n      max_conns_per_ip: 10",
+			want: "only apply to tcp",
 		},
 	}
 

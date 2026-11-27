@@ -13,27 +13,29 @@ import (
 	"time"
 
 	"github.com/diepkhoa/openwrt-cf-edge/internal/config"
+	"github.com/diepkhoa/openwrt-cf-edge/internal/edgefw"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/state"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/ubus"
 )
 
 type statusReport struct {
-	OS          string
-	Version     string
-	Cfg         *config.Config
-	StateFile   string
-	State       state.RuntimeState
-	LiveIPv4    string
-	LiveL3Dev   string
-	LiveIPv4Err error
-	LiveIPv6    string
-	LiveIPv6Err error
-	Lock        state.ShieldLock
-	Shielded    bool
-	LockErr     error
-	NftActive   bool
-	UbusStatus  ubus.InterfaceStatus
-	UbusErr     error
+	OS           string
+	Version      string
+	Cfg          *config.Config
+	StateFile    string
+	State        state.RuntimeState
+	LiveIPv4     string
+	LiveL3Dev    string
+	LiveIPv4Err  error
+	LiveIPv6     string
+	LiveIPv6Err  error
+	Lock         state.ShieldLock
+	Shielded     bool
+	LockErr      error
+	NftActive    bool
+	EdgeFWStatus edgefw.RuntimeStatus
+	UbusStatus   ubus.InterfaceStatus
+	UbusErr      error
 }
 
 func runStatus(args []string) error {
@@ -66,6 +68,7 @@ func runStatus(args []string) error {
 	}
 	rep.Lock, rep.Shielded, rep.LockErr = state.ReadShieldLock(state.DefaultShieldLockPath)
 	rep.NftActive, _ = deps.firewall.IsActive(ctx)
+	rep.EdgeFWStatus = deps.edgeFW.Status(ctx)
 	rep.UbusStatus, rep.UbusErr = deps.ubusClient.Status(ctx, deps.cfg.WAN.IfaceV4)
 
 	if *jsonOut {
@@ -113,6 +116,7 @@ func renderStatus(w io.Writer, rep statusReport) {
 
 	fmt.Fprintf(w, "PPPoE Guard:   %s\n", formatPPPoEGuardStatus(cfg.PPPoEGuard.Enabled, st.PPPoEStatus))
 	fmt.Fprintf(w, "DDoS Shield:   %s\n", formatDDoSShieldStatus(cfg.DDoSShield.Enabled, rep.Shielded, rep.Lock, rep.LockErr, rep.NftActive))
+	fmt.Fprintf(w, "Edge Firewall: %s\n", formatEdgeFirewallStatus(cfg.EdgeFirewall.Enabled, rep.EdgeFWStatus))
 
 	if cfg.AutoUpdate.Enabled {
 		fmt.Fprintf(w, "Auto-Update:   true (time=%s, restart=%v)\n", cfg.AutoUpdate.Time, cfg.AutoUpdate.Restart)
@@ -170,6 +174,14 @@ func formatDDoSShieldStatus(enabled, shielded bool, lock state.ShieldLock, lockE
 		return fmt.Sprintf("%v (lock_err=%v, nft=%v)", enabled, lockErr, nftActive)
 	}
 	return fmt.Sprintf("%v (shield=inactive, nft=%v)", enabled, nftActive)
+}
+
+func formatEdgeFirewallStatus(enabled bool, st edgefw.RuntimeStatus) string {
+	if !enabled && !st.NftActive {
+		return "false"
+	}
+	return fmt.Sprintf("%v (nft=%v rules=%d geoip_v4=%d geoip_v6=%d)",
+		enabled, st.NftActive, st.RuleCount, st.GeoIPv4Count, st.GeoIPv6Count)
 }
 
 func valueOrDash(s string) string {

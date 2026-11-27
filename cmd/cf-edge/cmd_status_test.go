@@ -49,6 +49,7 @@ func TestRenderStatusIncludesVersionAndDisabledFeaturesAsFalse(t *testing.T) {
 		"Reconcile:     false",
 		"PPPoE Guard:   false",
 		"DDoS Shield:   false (shield=inactive, nft=false)",
+		"Edge Firewall: false",
 		"Auto-Update:   false",
 		"Telegram:      false",
 	} {

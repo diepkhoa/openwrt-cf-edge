@@ -13,6 +13,7 @@ import (
 	"github.com/diepkhoa/openwrt-cf-edge/internal/cloudflare"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/config"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/ddos"
+	"github.com/diepkhoa/openwrt-cf-edge/internal/edgefw"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/ipwatch"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/netutil"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/notify"
@@ -34,6 +35,7 @@ type runtimeDeps struct {
 	firewall   ddos.Firewall
 	worker     ddos.WorkerAPI
 	shieldMgr  *ddos.ShieldManager
+	edgeFW     *edgefw.Manager
 }
 
 func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
@@ -80,6 +82,7 @@ func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
 		state.DefaultShieldLockPath,
 		logger,
 	)
+	edgeFW := edgefw.NewManager(cfg, ubusClient, nil, nil, nil, nil, notifier, logger)
 
 	return &runtimeDeps{
 		cfg:        cfg,
@@ -93,6 +96,7 @@ func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
 		firewall:   firewall,
 		worker:     worker,
 		shieldMgr:  shieldMgr,
+		edgeFW:     edgeFW,
 	}, nil
 }
 
@@ -189,6 +193,7 @@ func runDaemon(args []string) error {
 		"reconcile", deps.cfg.Reconcile.Enabled,
 		"pppoe_guard", deps.cfg.PPPoEGuard.Enabled,
 		"ddos_shield", deps.cfg.DDoSShield.Enabled,
+		"edge_firewall", deps.cfg.EdgeFirewall.Enabled,
 		"auto_update", deps.cfg.AutoUpdate.Enabled,
 	)
 
@@ -213,6 +218,10 @@ func runDaemon(args []string) error {
 	}
 	if deps.cfg.DDoSShield.Enabled || state.IsShielded(state.DefaultShieldLockPath) {
 		start("ddos.ShieldManager", deps.shieldMgr.Run)
+	}
+	if deps.cfg.EdgeFirewall.Enabled {
+		deps.edgeFW.SetListener(listener)
+		start("edgefw.Manager", deps.edgeFW.Run)
 	}
 	if deps.cfg.AutoUpdate.Enabled {
 		autoUpd := newAutoUpdater(deps.cfg, deps.notifier, state.DefaultShieldLockPath, logger)

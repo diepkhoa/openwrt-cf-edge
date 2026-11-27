@@ -7,26 +7,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diepkhoa/openwrt-cf-edge/internal/edgefw"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/state"
 )
 
 type statusJSON struct {
-	OS         string             `json:"os"`
-	Version    string             `json:"version"`
-	Node       string             `json:"node"`
-	StateFile  string             `json:"state_file"`
-	CachedIPv4 string             `json:"cached_ipv4,omitempty"`
-	CachedIPv6 string             `json:"cached_ipv6,omitempty"`
-	LastSync   string             `json:"last_sync,omitempty"`
-	LiveIPv4   string             `json:"live_ipv4,omitempty"`
-	LiveL3Dev  string             `json:"live_l3_dev,omitempty"`
-	LiveV4Err  string             `json:"live_ipv4_error,omitempty"`
-	LiveIPv6   string             `json:"live_ipv6,omitempty"`
-	LiveV6Err  string             `json:"live_ipv6_error,omitempty"`
-	Features   statusFeaturesJSON `json:"features"`
-	Shield     statusShieldJSON   `json:"shield"`
-	PPPoE      statusPPPoEJSON    `json:"pppoe"`
-	Records    []state.RecordState `json:"records"`
+	OS           string               `json:"os"`
+	Version      string               `json:"version"`
+	Node         string               `json:"node"`
+	StateFile    string               `json:"state_file"`
+	CachedIPv4   string               `json:"cached_ipv4,omitempty"`
+	CachedIPv6   string               `json:"cached_ipv6,omitempty"`
+	LastSync     string               `json:"last_sync,omitempty"`
+	LiveIPv4     string               `json:"live_ipv4,omitempty"`
+	LiveL3Dev    string               `json:"live_l3_dev,omitempty"`
+	LiveV4Err    string               `json:"live_ipv4_error,omitempty"`
+	LiveIPv6     string               `json:"live_ipv6,omitempty"`
+	LiveV6Err    string               `json:"live_ipv6_error,omitempty"`
+	Features     statusFeaturesJSON   `json:"features"`
+	Shield       statusShieldJSON     `json:"shield"`
+	EdgeFirewall edgefw.RuntimeStatus `json:"edge_firewall"`
+	PPPoE        statusPPPoEJSON      `json:"pppoe"`
+	Records      []state.RecordState  `json:"records"`
 }
 
 type statusFeaturesJSON struct {
@@ -35,6 +37,7 @@ type statusFeaturesJSON struct {
 	ReconcileInterval string `json:"reconcile_interval"`
 	PPPoEGuard        bool   `json:"pppoe_guard"`
 	DDoSShield        bool   `json:"ddos_shield"`
+	EdgeFirewall      bool   `json:"edge_firewall"`
 	AutoUpdate        bool   `json:"auto_update"`
 	AutoUpdateTime    string `json:"auto_update_time"`
 	AutoUpdateRestart bool   `json:"auto_update_restart"`
@@ -81,6 +84,7 @@ func renderStatusJSON(w io.Writer, rep statusReport) error {
 			ReconcileInterval: cfg.Reconcile.Interval.Std().String(),
 			PPPoEGuard:        cfg.PPPoEGuard.Enabled,
 			DDoSShield:        cfg.DDoSShield.Enabled,
+			EdgeFirewall:      cfg.EdgeFirewall.Enabled,
 			AutoUpdate:        cfg.AutoUpdate.Enabled,
 			AutoUpdateTime:    cfg.AutoUpdate.Time,
 			AutoUpdateRestart: cfg.AutoUpdate.Restart,
@@ -93,6 +97,7 @@ func renderStatusJSON(w io.Writer, rep statusReport) error {
 			WANIngressPort: rep.Lock.WANIngressPort,
 			NftActive:      rep.NftActive,
 		},
+		EdgeFirewall: rep.EdgeFWStatus,
 		PPPoE: statusPPPoEJSON{
 			Iface: cfg.WAN.IfaceV4,
 		},
