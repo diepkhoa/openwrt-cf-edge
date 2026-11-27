@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -192,65 +191,4 @@ func sanitizeHostOnly(rawURL string) string {
 		return "https://api.telegram.org"
 	}
 	return u.Scheme + "://" + u.Host
-}
-
-// FormatDDNSUpdate builds an HTML alert for updated Cloudflare DNS records.
-func FormatDDNSUpdate(nodeName, ipv4, ipv6 string, updated []string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "<b>[cf-edge] DDNS Updated</b> — <code>%s</code>\n", html.EscapeString(nodeName))
-	if ipv4 != "" {
-		fmt.Fprintf(&b, "• IPv4: <code>%s</code>\n", html.EscapeString(ipv4))
-	}
-	if ipv6 != "" {
-		fmt.Fprintf(&b, "• IPv6: <code>%s</code>\n", html.EscapeString(ipv6))
-	}
-	if len(updated) > 0 {
-		fmt.Fprintf(&b, "• Records: <code>%s</code>", html.EscapeString(strings.Join(updated, ", ")))
-	}
-	return b.String()
-}
-
-// FormatPPPoEAction builds an HTML alert for PPPoE Guard recovery events.
-func FormatPPPoEAction(nodeName, action, detail string) string {
-	return fmt.Sprintf(
-		"<b>[cf-edge] PPPoE Guard</b> — <code>%s</code>\n• Action: <code>%s</code>\n• Detail: %s",
-		html.EscapeString(nodeName),
-		html.EscapeString(action),
-		html.EscapeString(detail),
-	)
-}
-
-// FormatShieldEntered builds an HTML alert when entering DDoS Shield mode.
-func FormatShieldEntered(nodeName, reason, newIP, workerStatus string) string {
-	return fmt.Sprintf(
-		"<b>[cf-edge] DDoS SHIELD ENTERED</b> — <code>%s</code>\n• Reason: <code>%s</code>\n• New WAN IP: <code>%s</code>\n• Worker: %s",
-		html.EscapeString(nodeName),
-		html.EscapeString(reason),
-		html.EscapeString(newIP),
-		html.EscapeString(workerStatus),
-	)
-}
-
-// FormatShieldExited builds an HTML alert when exiting DDoS Shield mode.
-func FormatShieldExited(nodeName, detail string) string {
-	return fmt.Sprintf(
-		"<b>[cf-edge] DDoS Shield Exited</b> — <code>%s</code>\n• Status: %s",
-		html.EscapeString(nodeName),
-		html.EscapeString(detail),
-	)
-}
-
-// FormatAutoUpdate builds an HTML alert when a scheduled binary update succeeds.
-func FormatAutoUpdate(nodeName, fromVersion, toVersion string, restarting bool) string {
-	action := "binary updated"
-	if restarting {
-		action = "binary updated, restarting service"
-	}
-	return fmt.Sprintf(
-		"<b>[cf-edge] Auto-Update</b> — <code>%s</code>\n• Version: <code>%s</code> → <code>%s</code>\n• Action: %s",
-		html.EscapeString(nodeName),
-		html.EscapeString(fromVersion),
-		html.EscapeString(toVersion),
-		action,
-	)
 }

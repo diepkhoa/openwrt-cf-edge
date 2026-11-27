@@ -200,3 +200,72 @@ func TestUpdaterGlobalRetryAndShieldBlock(t *testing.T) {
 		t.Fatalf("unexpected error string: %v", err)
 	}
 }
+
+type flakyNotifier struct {
+	failNext atomic.Bool
+	mu       sync.Mutex
+	msgs     []string
+}
+
+func (f *flakyNotifier) Send(_ context.Context, msg string) error {
+	if f.failNext.Load() {
+		return errors.New("temporary DNS error")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.msgs = append(f.msgs, msg)
+	return nil
+}
+
+func TestUpdaterFlushesPendingNotifyWhenIPv6ArrivesLater(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`{"success":true,"result":[]}`))
+		case http.MethodPost:
+			var body DNSRecord
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			body.ID = "id-" + body.Type
+			_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "result": body})
+		}
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	store := state.NewStore(filepath.Join(dir, "state.json"))
+	cfg := newTestConfig()
+	cfg.NodeName = "knr3053"
+	cfg.Cloudflare.Records[0].Subdomain = "test.com"
+	api := NewHTTPClient("secret", WithBaseURL(srv.URL))
+
+	flaky := &flakyNotifier{}
+	flaky.failNext.Store(true)
+
+	upd := NewUpdater(cfg, api, store, flaky, filepath.Join(dir, "shield.lock"), nil,
+		WithTiming(0, 0, 0, 1, 1),
+	)
+
+	// Pass 1 (boot): only IPv4 available, A record updates on CF, Telegram send fails.
+	if err := upd.Sync(context.Background(), ipwatch.Snapshot{IPv4: "42.118.213.53"}, SyncOptions{}); err != nil {
+		t.Fatalf("Pass 1 sync failed: %v", err)
+	}
+	if got := store.Get().PendingNotify; len(got) != 1 || got[0] != "test.com (A)" {
+		t.Fatalf("expected PendingNotify=[test.com (A)], got %v", got)
+	}
+
+	// Pass 2 (3 minutes later): IPv6 comes up, Telegram recovers and must merge A + AAAA cleanly.
+	flaky.failNext.Store(false)
+	if err := upd.Sync(context.Background(), ipwatch.Snapshot{IPv4: "42.118.213.53", IPv6: "2405:4803::1"}, SyncOptions{}); err != nil {
+		t.Fatalf("Pass 2 sync failed: %v", err)
+	}
+	if got := store.Get().PendingNotify; len(got) != 0 {
+		t.Fatalf("expected PendingNotify cleared after send, got %v", got)
+	}
+	if len(flaky.msgs) != 1 {
+		t.Fatalf("expected 1 combined Telegram message, got %d", len(flaky.msgs))
+	}
+	msg := flaky.msgs[0]
+	if !strings.Contains(msg, "42.118.213.53") || !strings.Contains(msg, "2405:4803::1") || !strings.Contains(msg, "test.com (A, AAAA)") {
+		t.Fatalf("expected combined IPv4 + IPv6 + grouped host (A, AAAA), got:\n%s", msg)
+	}
+}
