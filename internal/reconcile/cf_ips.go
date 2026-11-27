@@ -127,12 +127,40 @@ func (c *CFProxyCatalog) getPrefixes(ctx context.Context) []netip.Prefix {
 	return c.prefixes
 }
 
-func (c *CFProxyCatalog) fetchCloudflareIPs(ctx context.Context) ([]string, []string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.ipsURL, nil)
+// StaticCloudflareCIDRs returns copies of the built-in Cloudflare IPv4 and IPv6 CIDR lists.
+func StaticCloudflareCIDRs() (v4 []string, v6 []string) {
+	for _, raw := range staticCloudflareCIDRs {
+		if stringsContainsColon(raw) {
+			v6 = append(v6, raw)
+		} else {
+			v4 = append(v4, raw)
+		}
+	}
+	return v4, v6
+}
+
+func stringsContainsColon(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == ':' {
+			return true
+		}
+	}
+	return false
+}
+
+// FetchCloudflareIPs retrieves official Cloudflare IPv4 and IPv6 CIDR ranges from Cloudflare's API.
+func FetchCloudflareIPs(ctx context.Context, client *http.Client, ipsURL string) ([]string, []string, error) {
+	if ipsURL == "" {
+		ipsURL = defaultCFIPsURL
+	}
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ipsURL, nil)
 	if err != nil {
 		return nil, nil, err
 	}
-	resp, err := c.httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -148,11 +176,15 @@ func (c *CFProxyCatalog) fetchCloudflareIPs(ctx context.Context) ([]string, []st
 		Success bool `json:"success"`
 		Result  struct {
 			IPv4CIDRs []string `json:"ipv4_cidrs"`
-			IPv6CIDRs []string `json:"ipv6_cidrs"`
+			IPv6CIDRs []string `yaml:"ipv6_cidrs" json:"ipv6_cidrs"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil || !payload.Success {
 		return nil, nil, io.ErrUnexpectedEOF
 	}
 	return payload.Result.IPv4CIDRs, payload.Result.IPv6CIDRs, nil
+}
+
+func (c *CFProxyCatalog) fetchCloudflareIPs(ctx context.Context) ([]string, []string, error) {
+	return FetchCloudflareIPs(ctx, c.httpClient, c.ipsURL)
 }

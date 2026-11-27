@@ -50,6 +50,45 @@ ddos_shield:
   max_redials_per_hour: 3
   status_poll_interval: "2m"
 
+# Optional: OpenWrt 25.12 fw4-native GeoIP + rate-limit firewall (table inet cf_edge_fw)
+edge_firewall:
+  enabled: false
+  refresh_interval: "168h"                   # Refresh GeoIP/Cloudflare ranges weekly
+  cache_path: "/etc/cf-edge/geoip-cache.json"
+  wan_devices: []                            # Optional override; empty = auto-resolve via ubus
+  geoip_countries: ["vn"]
+  include_cloudflare: true
+  allow_cidrs: []
+  drop_invalid_tcp: true
+  drop_ip_options_tcp: false
+  allow_ssh_port: false
+  rollback_on_check_fail: true
+  health_check_tcp: ["1.1.1.1:443", "8.8.8.8:443"]
+  health_check_udp: ["1.1.1.1:53", "8.8.8.8:53"]
+  health_check_internal_tcp: []              # Optional LAN/NetBird peer checks, e.g. ["192.168.1.10:22"]
+  rules:
+    - name: "haproxy_https"
+      chain: "input"
+      proto: "tcp"
+      ports: [443]
+      geoip_enforce: true
+      global_pps: 30000
+      global_burst: 5000
+      per_ip_pps: 26000
+      per_ip_burst: 5000
+      max_conns_per_ip: 80
+      syn_rate_per_ip: 25
+      syn_burst: 100
+    - name: "livekit_webrtc"
+      chain: "forward"
+      proto: "udp"
+      ports: [50044]
+      geoip_enforce: true
+      global_pps: 15000
+      global_burst: 2000
+      per_ip_pps: 5000
+      per_ip_burst: 800
+
 # Optional: Check GitHub Releases once per day at a custom local time (24h "HH:MM")
 auto_update:
   enabled: false

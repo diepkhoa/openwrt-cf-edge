@@ -38,6 +38,7 @@ func defaultConfig() Config {
 			MaxRedialsPerHour:  3,
 			StatusPollInterval: Duration(2 * time.Minute),
 		},
+		EdgeFirewall: defaultEdgeFirewallConfig(),
 		AutoUpdate: AutoUpdateConfig{
 			Enabled: false,
 			Time:    "03:30",
@@ -70,6 +71,7 @@ func (c *Config) normalizeAndValidate() error {
 		c.validateReconcile,
 		c.validatePPPoEGuard,
 		c.validateDDoSShield,
+		c.validateEdgeFirewall,
 		c.validateAutoUpdate,
 		c.validateTelegram,
 	} {

@@ -47,14 +47,50 @@ func (d Duration) String() string {
 
 // Config represents the read-only configuration loaded from /etc/cf-edge/config.yaml.
 type Config struct {
-	NodeName   string           `yaml:"node_name"`
-	WAN        WANConfig        `yaml:"wan"`
-	Cloudflare CloudflareConfig `yaml:"cloudflare"`
-	Reconcile  ReconcileConfig  `yaml:"reconcile"`
-	PPPoEGuard PPPoEGuardConfig `yaml:"pppoe_guard"`
-	DDoSShield DDoSShieldConfig `yaml:"ddos_shield"`
-	AutoUpdate AutoUpdateConfig `yaml:"auto_update"`
-	Telegram   TelegramConfig   `yaml:"telegram"`
+	NodeName     string             `yaml:"node_name"`
+	WAN          WANConfig          `yaml:"wan"`
+	Cloudflare   CloudflareConfig   `yaml:"cloudflare"`
+	Reconcile    ReconcileConfig    `yaml:"reconcile"`
+	PPPoEGuard   PPPoEGuardConfig   `yaml:"pppoe_guard"`
+	DDoSShield   DDoSShieldConfig   `yaml:"ddos_shield"`
+	EdgeFirewall EdgeFirewallConfig `yaml:"edge_firewall"`
+	AutoUpdate   AutoUpdateConfig   `yaml:"auto_update"`
+	Telegram     TelegramConfig     `yaml:"telegram"`
+}
+
+// EdgeFirewallConfig configures the OpenWrt fw4-native GeoIP & rate-limit nftables module.
+type EdgeFirewallConfig struct {
+	Enabled                bool                 `yaml:"enabled"`
+	RefreshInterval        Duration             `yaml:"refresh_interval"`
+	CachePath              string               `yaml:"cache_path"`
+	WANDevices             []string             `yaml:"wan_devices"`
+	GeoIPCountries         []string             `yaml:"geoip_countries"`
+	IncludeCloudflare      bool                 `yaml:"include_cloudflare"`
+	AllowCIDRs             []string             `yaml:"allow_cidrs"`
+	DropInvalidTCP         bool                 `yaml:"drop_invalid_tcp"`
+	DropIPOptionsTCP       bool                 `yaml:"drop_ip_options_tcp"`
+	AllowSSHPort           bool                 `yaml:"allow_ssh_port"`
+	RollbackOnCheckFail    bool                 `yaml:"rollback_on_check_fail"`
+	HealthCheckTCP         []string             `yaml:"health_check_tcp"`
+	HealthCheckUDP         []string             `yaml:"health_check_udp"`
+	HealthCheckInternalTCP []string             `yaml:"health_check_internal_tcp"`
+	Rules                  []FirewallRuleConfig `yaml:"rules"`
+}
+
+// FirewallRuleConfig configures ingress protection rules for a protocol and set of destination ports.
+type FirewallRuleConfig struct {
+	Name          string `yaml:"name"`
+	Chain         string `yaml:"chain"` // "input" or "forward"
+	Proto         string `yaml:"proto"` // "tcp" or "udp"
+	Ports         []int  `yaml:"ports"`
+	GeoIPEnforce  bool   `yaml:"geoip_enforce"`
+	GlobalPPS     int    `yaml:"global_pps"`
+	GlobalBurst   int    `yaml:"global_burst"`
+	PerIPPPS      int    `yaml:"per_ip_pps"`
+	PerIPBurst    int    `yaml:"per_ip_burst"`
+	MaxConnsPerIP int    `yaml:"max_conns_per_ip"`
+	SynRatePerIP  int    `yaml:"syn_rate_per_ip"`
+	SynBurst      int    `yaml:"syn_burst"`
 }
 
 // AutoUpdateConfig configures scheduled daily self-updates from GitHub Releases.

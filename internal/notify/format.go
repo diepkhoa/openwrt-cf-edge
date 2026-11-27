@@ -139,3 +139,13 @@ func FormatAutoUpdate(nodeName, fromVersion, toVersion string, restarting bool) 
 		action,
 	)
 }
+
+// FormatFirewallAlert builds an HTML alert for edge_firewall failures or automatic rollbacks.
+func FormatFirewallAlert(nodeName, action, detail string) string {
+	return fmt.Sprintf(
+		"🔥 <b>[cf-edge] Edge Firewall %s</b> — <code>%s</code>\n• <b>Detail:</b> %s",
+		html.EscapeString(action),
+		html.EscapeString(nodeName),
+		html.EscapeString(detail),
+	)
+}

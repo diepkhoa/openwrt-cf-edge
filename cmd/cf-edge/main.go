@@ -38,6 +38,8 @@ func run(args []string) error {
 		return runStatus(args[1:])
 	case "shield":
 		return runShield(args[1:])
+	case "firewall":
+		return runFirewall(args[1:])
 	case "self-update":
 		return runSelfUpdate(args[1:])
 	case "validate":
@@ -62,6 +64,7 @@ Usage:
   cf-edge status [-c /etc/cf-edge/config.yaml] [--json]
   cf-edge validate [-c /etc/cf-edge/config.yaml] [--json]
   cf-edge shield [-c /etc/cf-edge/config.yaml] <enter [--no-redial] | exit | status>
+  cf-edge firewall [-c /etc/cf-edge/config.yaml] <render | apply | remove | status>
   cf-edge self-update [--check] [--restart] [--version vX.Y.Z] [--repo owner/repo]
   cf-edge version [--json]`)
 }

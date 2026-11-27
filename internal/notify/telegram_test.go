@@ -155,4 +155,11 @@ func TestFormatDDNSUpdateGroupsHostsAndSortsTypes(t *testing.T) {
 		!strings.Contains(multi, "<code>wg.com (AAAA)</code>") {
 		t.Fatalf("unexpected multi-host formatting:\n%s", multi)
 	}
+
+	fwAlert := FormatFirewallAlert("edge<1>", "AUTO-ROLLBACK", "outbound UDP dropped")
+	if !strings.Contains(fwAlert, "Edge Firewall AUTO-ROLLBACK") ||
+		!strings.Contains(fwAlert, "<code>edge&lt;1&gt;</code>") ||
+		!strings.Contains(fwAlert, "outbound UDP dropped") {
+		t.Fatalf("unexpected firewall alert formatting:\n%s", fwAlert)
+	}
 }
