@@ -72,13 +72,15 @@ func runSelfUpdate(args []string) error {
 	if *noRestart || !*legacyRestart {
 		return nil
 	}
-	return maybeRestartService(ctx, defaultInitScript, defaultConfigPath, func(runCtx context.Context, script string) error {
-		out, err := exec.CommandContext(runCtx, script, "restart").CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("%w (%s)", err, strings.TrimSpace(string(out)))
-		}
-		return nil
-	})
+	return maybeRestartService(ctx, defaultInitScript, defaultConfigPath, execInitRestart)
+}
+
+func execInitRestart(ctx context.Context, script string) error {
+	out, err := exec.CommandContext(ctx, script, "restart").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w (%s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func maybeRestartService(ctx context.Context, initScript, configPath string, runner func(context.Context, string) error) error {

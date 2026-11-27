@@ -44,6 +44,8 @@ func run(args []string) error {
 		return runSelfUpdate(args[1:])
 	case "validate":
 		return runValidate(args[1:])
+	case "restart":
+		return runRestart(args[1:])
 	case "version", "--version", "-v":
 		return runVersion(args[1:])
 	case "help", "-h", "--help":
@@ -63,6 +65,7 @@ Usage:
   cf-edge update [--force]
   cf-edge status [--json]
   cf-edge validate [--json]
+  cf-edge restart
   cf-edge shield <enter [--no-redial] | exit | status>
   cf-edge firewall <render | apply [--refresh] | remove | status [--json]>
   cf-edge self-update [--check] [--version vX.Y.Z] [--no-restart]
