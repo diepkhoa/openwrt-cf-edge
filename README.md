@@ -30,6 +30,7 @@ cf-edge daemon
 cf-edge update [--force]
 cf-edge status [--json]
 cf-edge validate [--json]
+cf-edge restart
 cf-edge shield <enter [--no-redial] | exit | status>
 cf-edge firewall <render | apply [--refresh] | remove | status [--json]>
 cf-edge self-update [--check] [--version vX.Y.Z] [--no-restart]
