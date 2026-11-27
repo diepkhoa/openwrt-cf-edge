@@ -18,7 +18,10 @@ import (
 	"time"
 )
 
-const defaultGitHubAPIBase = "https://api.github.com"
+const (
+	defaultGitHubAPIBase = "https://api.github.com"
+	defaultInitScript    = "/etc/init.d/cf-edge"
+)
 
 type githubRelease struct {
 	TagName string `json:"tag_name"`
@@ -33,7 +36,9 @@ func runSelfUpdate(args []string) error {
 	repo := fs.String("repo", githubRepo, "GitHub repository (owner/name)")
 	targetVersion := fs.String("version", "", "specific release tag (defaults to latest)")
 	checkOnly := fs.Bool("check", false, "check latest version without replacing binary")
-	restart := fs.Bool("restart", false, "run /etc/init.d/cf-edge restart after update")
+	noRestart := fs.Bool("no-restart", false, "skip automatic /etc/init.d/cf-edge restart after update")
+	// Keep --restart for backward compatibility with older scripts; CLI self-update restarts by default.
+	legacyRestart := fs.Bool("restart", true, "deprecated: service restarts automatically after CLI update")
 	if err := fs.Parse(reorderFlags(args)); err != nil {
 		return err
 	}
@@ -64,13 +69,31 @@ func runSelfUpdate(args []string) error {
 	}
 	fmt.Printf("Updated cf-edge to %s\n", tag)
 
-	if *restart {
-		cmd := exec.CommandContext(ctx, "/etc/init.d/cf-edge", "restart")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("restart service failed: %w (%s)", err, strings.TrimSpace(string(out)))
-		}
-		fmt.Println("Service cf-edge restarted")
+	if *noRestart || !*legacyRestart {
+		return nil
 	}
+	return maybeRestartService(ctx, defaultInitScript, defaultConfigPath, func(runCtx context.Context, script string) error {
+		out, err := exec.CommandContext(runCtx, script, "restart").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%w (%s)", err, strings.TrimSpace(string(out)))
+		}
+		return nil
+	})
+}
+
+func maybeRestartService(ctx context.Context, initScript, configPath string, runner func(context.Context, string) error) error {
+	if _, err := os.Stat(initScript); err != nil {
+		fmt.Println("Init script not found; skipped automatic service restart")
+		return nil
+	}
+	if _, err := os.Stat(configPath); err != nil {
+		fmt.Println("Config file not found; skipped automatic service restart")
+		return nil
+	}
+	if err := runner(ctx, initScript); err != nil {
+		return fmt.Errorf("restart service failed: %w", err)
+	}
+	fmt.Println("Service cf-edge restarted")
 	return nil
 }
 
