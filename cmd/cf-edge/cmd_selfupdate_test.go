@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -93,5 +94,39 @@ func TestPerformSelfUpdateRejectsBadChecksum(t *testing.T) {
 	got, _ := os.ReadFile(target)
 	if string(got) != "original" {
 		t.Fatalf("original binary should remain untouched on checksum failure")
+	}
+}
+
+func TestMaybeRestartServiceBehavior(t *testing.T) {
+	dir := t.TempDir()
+	initPath := filepath.Join(dir, "init-cf-edge")
+	cfgPath := filepath.Join(dir, "config.yaml")
+
+	var calls int
+	runner := func(context.Context, string) error {
+		calls++
+		return nil
+	}
+
+	// Missing init/config should skip gracefully without error.
+	if err := maybeRestartService(context.Background(), initPath, cfgPath, runner); err != nil {
+		t.Fatalf("unexpected error when files missing: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("expected 0 restart calls when init/config missing, got %d", calls)
+	}
+
+	// When both exist, CLI self-update restarts service automatically.
+	if err := os.WriteFile(initPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath, []byte("node_name: test\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := maybeRestartService(context.Background(), initPath, cfgPath, runner); err != nil {
+		t.Fatalf("unexpected error when init and config exist: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 automatic restart call, got %d", calls)
 	}
 }

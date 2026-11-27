@@ -26,13 +26,16 @@ chmod 600 /etc/cf-edge/config.yaml
 ## CLI Usage
 
 ```text
-cf-edge daemon [-c /etc/cf-edge/config.yaml]
-cf-edge update [-c /etc/cf-edge/config.yaml] [--force]
-cf-edge status [-c /etc/cf-edge/config.yaml] [--json]
-cf-edge validate [-c /etc/cf-edge/config.yaml] [--json]
-cf-edge shield [-c /etc/cf-edge/config.yaml] <enter [--no-redial] | exit | status>
-cf-edge self-update [--check] [--restart] [--version vX.Y.Z] [--repo owner/repo]
+cf-edge daemon
+cf-edge update [--force]
+cf-edge status [--json]
+cf-edge validate [--json]
+cf-edge shield <enter [--no-redial] | exit | status>
+cf-edge firewall <render | apply [--refresh] | remove | status [--json]>
+cf-edge self-update [--check] [--version vX.Y.Z] [--no-restart]
 cf-edge version [--json]
 ```
+
+*(Pass `-c <path>` to override `/etc/cf-edge/config.yaml`; `cf-edge self-update` automatically restarts `/etc/init.d/cf-edge` on OpenWrt unless `--no-restart` is set.)*
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for package structure and build instructions.

@@ -56,15 +56,17 @@ func run(args []string) error {
 }
 
 func printUsage() {
-	fmt.Println(`cf-edge - OpenWrt Event-Driven Cloudflare DDNS, PPPoE Guard & Edge DDoS Shield
+	fmt.Println(`cf-edge - OpenWrt Event-Driven Cloudflare DDNS, PPPoE Guard, Edge Firewall & DDoS Shield
 
 Usage:
-  cf-edge daemon [-c /etc/cf-edge/config.yaml]
-  cf-edge update [-c /etc/cf-edge/config.yaml] [--force]
-  cf-edge status [-c /etc/cf-edge/config.yaml] [--json]
-  cf-edge validate [-c /etc/cf-edge/config.yaml] [--json]
-  cf-edge shield [-c /etc/cf-edge/config.yaml] <enter [--no-redial] | exit | status>
-  cf-edge firewall [-c /etc/cf-edge/config.yaml] <render | apply | remove | status>
-  cf-edge self-update [--check] [--restart] [--version vX.Y.Z] [--repo owner/repo]
-  cf-edge version [--json]`)
+  cf-edge daemon
+  cf-edge update [--force]
+  cf-edge status [--json]
+  cf-edge validate [--json]
+  cf-edge shield <enter [--no-redial] | exit | status>
+  cf-edge firewall <render | apply [--refresh] | remove | status [--json]>
+  cf-edge self-update [--check] [--version vX.Y.Z] [--no-restart]
+  cf-edge version [--json]
+
+Global option: -c <path> (default: /etc/cf-edge/config.yaml)`)
 }
