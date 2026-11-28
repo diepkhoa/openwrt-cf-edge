@@ -133,6 +133,11 @@ func renderStatus(w io.Writer, rep statusReport) {
 	fmt.Fprintf(w, "PPPoE Guard:   %s\n", formatPPPoEGuardStatus(cfg.PPPoEGuard.Enabled, st.PPPoEStatus))
 	fmt.Fprintf(w, "DDoS Shield:   %s\n", formatDDoSShieldStatus(cfg.DDoSShield.Enabled, rep.Shielded, rep.Lock, rep.LockErr, rep.NftActive))
 	fmt.Fprintf(w, "Edge Firewall: %s\n", formatEdgeFirewallStatus(cfg.EdgeFirewall.Enabled, rep.EdgeFWStatus))
+	if cfg.Metrics.Enabled {
+		fmt.Fprintf(w, "Metrics:       true (%s:%d)\n", cfg.Metrics.BindDevice, cfg.Metrics.Port)
+	} else {
+		fmt.Fprintln(w, "Metrics:       false")
+	}
 
 	if cfg.AutoUpdate.Enabled {
 		fmt.Fprintf(w, "Auto-Update:   true (time=%s, restart=%v)\n", cfg.AutoUpdate.Time, cfg.AutoUpdate.Restart)

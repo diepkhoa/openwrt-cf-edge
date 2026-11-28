@@ -205,6 +205,16 @@ func TestParseValidationErrors(t *testing.T) {
 			yaml: "cloudflare:\n  zone_id: z\n  api_token: t\n  records:\n    - subdomain: a.b\n      ipv4: true\nedge_firewall:\n  enabled: true\n  rules:\n    - name: rtc\n      chain: forward\n      proto: udp\n      ports: [50044]\n      max_conns_per_ip: 10",
 			want: "only apply to tcp",
 		},
+		{
+			name: "metrics rejects wildcard bind_device",
+			yaml: "cloudflare:\n  enabled: false\nmetrics:\n  enabled: true\n  bind_device: \"0.0.0.0\"",
+			want: "metrics.bind_device",
+		},
+		{
+			name: "metrics defaults bind_device from overlay_device",
+			yaml: "cloudflare:\n  enabled: false\nmetrics:\n  enabled: true",
+			want: "metrics.bind_device",
+		},
 	}
 
 	// Also verify normalizing single-digit hour and preserving restart=false.

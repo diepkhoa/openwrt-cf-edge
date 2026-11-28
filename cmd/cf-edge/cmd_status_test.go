@@ -51,6 +51,7 @@ func TestRenderStatusIncludesVersionAndDisabledFeaturesAsFalse(t *testing.T) {
 		"PPPoE Guard:   false",
 		"DDoS Shield:   false (shield=inactive, nft=false)",
 		"Edge Firewall: false",
+		"Metrics:       false",
 		"Auto-Update:   false",
 		"Telegram:      false",
 	} {
