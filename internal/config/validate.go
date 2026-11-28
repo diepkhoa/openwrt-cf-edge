@@ -63,10 +63,21 @@ func (c *Config) normalizeAndValidate() error {
 
 	c.WAN.IfaceV4 = strings.TrimSpace(c.WAN.IfaceV4)
 	c.WAN.IfaceV6 = strings.TrimSpace(c.WAN.IfaceV6)
+	c.WAN.WANDeviceV4 = strings.TrimSpace(c.WAN.WANDeviceV4)
+	c.WAN.OverlayDevice = strings.TrimSpace(c.WAN.OverlayDevice)
+	c.WAN.LANDevice = strings.TrimSpace(c.WAN.LANDevice)
 	c.WAN.OverlayIface = strings.TrimSpace(c.WAN.OverlayIface)
 	c.WAN.LANIface = strings.TrimSpace(c.WAN.LANIface)
+	if c.WAN.OverlayDevice == "" {
+		c.WAN.OverlayDevice = c.WAN.OverlayIface
+	}
+	if c.WAN.LANDevice == "" {
+		c.WAN.LANDevice = c.WAN.LANIface
+	}
+	c.WAN.OverlayIface = c.WAN.OverlayDevice
+	c.WAN.LANIface = c.WAN.LANDevice
 	if c.WAN.IfaceV4 == "" {
-		return errors.New("wan.iface_v4 must not be empty")
+		c.WAN.IfaceV4 = "wan"
 	}
 
 	for _, fn := range []func() error{
@@ -202,8 +213,8 @@ func (c *Config) validateDDoSShield() error {
 	if !c.DDoSShield.Enabled {
 		return nil
 	}
-	if c.WAN.OverlayIface == "" {
-		return errors.New("wan.overlay_iface must not be empty when ddos_shield is enabled")
+	if c.WAN.EffectiveOverlayDevice() == "" {
+		return errors.New("wan.overlay_device (or overlay_iface) must not be empty when ddos_shield is enabled")
 	}
 	if c.DDoSShield.WorkerURL == "" {
 		return errors.New("ddos_shield.worker_url must not be empty when ddos_shield is enabled")

@@ -116,6 +116,8 @@ func TestRenderStatusJSON(t *testing.T) {
 	var buf bytes.Buffer
 	err := renderStatusJSON(&buf, statusReport{
 		OS:        "linux/arm64",
+		Platform:  "openwrt (ubus, procd)",
+		HasUbus:   true,
 		Version:   "v0.1.5",
 		Cfg:       cfg,
 		StateFile: "/tmp/cf-edge-state.json",

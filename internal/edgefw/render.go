@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/diepkhoa/openwrt-cf-edge/internal/config"
+	"github.com/diepkhoa/openwrt-cf-edge/internal/netutil"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/ubus"
 )
 
@@ -25,7 +26,8 @@ func NeedsGeoIPSets(cfg config.EdgeFirewallConfig) bool {
 }
 
 // ResolveWANDevices resolves the active L3 WAN devices safe for ingress matching,
-// rejecting loopback, LAN, bridge, and overlay interfaces.
+// rejecting loopback, LAN, bridge, and overlay interfaces. Falls back to Linux Netlink
+// default route when OpenWrt ubus is unavailable.
 func ResolveWANDevices(ctx context.Context, cfg *config.Config, ubusClient ubus.Client, override []string) ([]string, error) {
 	var raw []string
 	switch {
@@ -34,19 +36,26 @@ func ResolveWANDevices(ctx context.Context, cfg *config.Config, ubusClient ubus.
 	case len(cfg.EdgeFirewall.WANDevices) > 0:
 		raw = cfg.EdgeFirewall.WANDevices
 	default:
-		if ubusClient == nil {
-			return nil, errors.New("ubus client unavailable to resolve WAN devices")
+		if cfg.WAN.WANDeviceV4 != "" {
+			raw = append(raw, cfg.WAN.WANDeviceV4)
 		}
-		for _, iface := range []string{cfg.WAN.IfaceV4, cfg.WAN.IfaceV6} {
-			if strings.TrimSpace(iface) == "" {
-				continue
+		if ubusClient != nil {
+			for _, iface := range []string{cfg.WAN.IfaceV4, cfg.WAN.IfaceV6} {
+				if strings.TrimSpace(iface) == "" {
+					continue
+				}
+				st, err := ubusClient.Status(ctx, iface)
+				if err != nil {
+					continue
+				}
+				if dev := st.EffectiveL3Device(); dev != "" {
+					raw = append(raw, dev)
+				}
 			}
-			st, err := ubusClient.Status(ctx, iface)
-			if err != nil {
-				continue
-			}
-			if dev := st.EffectiveL3Device(); dev != "" {
-				raw = append(raw, dev)
+		}
+		if len(raw) == 0 {
+			if routeIface, _, err := (netutil.LinuxInspector{}).DefaultRouteIPv4(ctx); err == nil && routeIface != "" {
+				raw = append(raw, routeIface)
 			}
 		}
 	}
@@ -58,7 +67,7 @@ func ResolveWANDevices(ctx context.Context, cfg *config.Config, ubusClient ubus.
 		if d == "" {
 			continue
 		}
-		if config.IsForbiddenWANDevice(d, cfg.WAN.LANIface, cfg.WAN.OverlayIface) {
+		if config.IsForbiddenWANDevice(d, cfg.WAN.EffectiveLANDevice(), cfg.WAN.EffectiveOverlayDevice()) {
 			return nil, fmt.Errorf("refusing forbidden internal/overlay interface %q in WAN firewall scope", d)
 		}
 		if _, ok := seen[d]; !ok {
@@ -68,7 +77,7 @@ func ResolveWANDevices(ctx context.Context, cfg *config.Config, ubusClient ubus.
 	}
 	sort.Strings(out)
 	if len(out) == 0 {
-		return nil, errors.New("no active WAN L3 device resolved via ubus")
+		return nil, errors.New("no active WAN L3 device resolved via ubus or Netlink default route")
 	}
 	return out, nil
 }
@@ -79,7 +88,7 @@ func BuildScript(cfg *config.Config, wanDevs, v4CIDRs, v6CIDRs []string) (string
 		return "", errors.New("cannot render nftables script without WAN devices")
 	}
 	for _, d := range wanDevs {
-		if config.IsForbiddenWANDevice(d, cfg.WAN.LANIface, cfg.WAN.OverlayIface) {
+		if config.IsForbiddenWANDevice(d, cfg.WAN.EffectiveLANDevice(), cfg.WAN.EffectiveOverlayDevice()) {
 			return "", fmt.Errorf("forbidden internal/overlay device %q in WAN match list", d)
 		}
 	}

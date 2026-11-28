@@ -40,10 +40,14 @@ func NewWatcher(cfg *config.Config, discoverer *Discoverer, listener *ubus.Liste
 	}
 }
 
-// Run subscribes to ubus events, runs an initial check, and preempts stale updates on new events.
+// Run subscribes to ubus events (when available), runs an initial check, and preempts stale updates on new events.
 func (w *Watcher) Run(ctx context.Context) {
-	events, unsubscribe := w.listener.Subscribe(16)
-	defer unsubscribe()
+	var events <-chan ubus.Event
+	if w.listener != nil {
+		var unsubscribe func()
+		events, unsubscribe = w.listener.Subscribe(16)
+		defer unsubscribe()
+	}
 
 	var (
 		activeCancel context.CancelFunc

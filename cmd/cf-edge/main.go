@@ -42,6 +42,8 @@ func run(args []string) error {
 		return runFirewall(args[1:])
 	case "self-update":
 		return runSelfUpdate(args[1:])
+	case "config-example":
+		return runConfigExample(args[1:])
 	case "validate":
 		return runValidate(args[1:])
 	case "restart":
@@ -69,6 +71,7 @@ Usage:
   cf-edge shield <enter [--no-redial] | exit | status>
   cf-edge firewall <render | apply [--refresh] | remove | status [--json]>
   cf-edge self-update [--check] [--version vX.Y.Z] [--no-restart]
+  cf-edge config-example [--write]
   cf-edge version [--json]
 
 Global option: -c <path> (default: /etc/cf-edge/config.yaml)`)

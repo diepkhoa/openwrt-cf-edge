@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/diepkhoa/openwrt-cf-edge/internal/platform"
 )
 
 func TestPerformSelfUpdateVerifiesSHA256AndReplacesAtomically(t *testing.T) {
@@ -99,34 +101,43 @@ func TestPerformSelfUpdateRejectsBadChecksum(t *testing.T) {
 
 func TestMaybeRestartServiceBehavior(t *testing.T) {
 	dir := t.TempDir()
-	initPath := filepath.Join(dir, "init-cf-edge")
 	cfgPath := filepath.Join(dir, "config.yaml")
 
 	var calls int
-	runner := func(context.Context, string) error {
+	runner := func(context.Context, platform.Env) error {
 		calls++
 		return nil
 	}
 
-	// Missing init/config should skip gracefully without error.
-	if err := maybeRestartService(context.Background(), initPath, cfgPath, runner); err != nil {
-		t.Fatalf("unexpected error when files missing: %v", err)
+	// Missing service manager or config should skip gracefully without error.
+	if err := maybeRestartService(context.Background(), platform.Env{ServiceMgr: platform.ServiceNone}, cfgPath, runner); err != nil {
+		t.Fatalf("unexpected error when no service manager: %v", err)
+	}
+	if err := maybeRestartService(context.Background(), platform.Env{ServiceMgr: platform.ServiceProcd}, cfgPath, runner); err != nil {
+		t.Fatalf("unexpected error when config missing: %v", err)
 	}
 	if calls != 0 {
-		t.Fatalf("expected 0 restart calls when init/config missing, got %d", calls)
+		t.Fatalf("expected 0 restart calls when env/config missing, got %d", calls)
 	}
 
-	// When both exist, CLI self-update restarts service automatically.
-	if err := os.WriteFile(initPath, []byte("#!/bin/sh\n"), 0755); err != nil {
-		t.Fatal(err)
-	}
+	// When service manager & config exist, CLI self-update restarts service automatically.
 	if err := os.WriteFile(cfgPath, []byte("node_name: test\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := maybeRestartService(context.Background(), initPath, cfgPath, runner); err != nil {
-		t.Fatalf("unexpected error when init and config exist: %v", err)
+	if err := maybeRestartService(context.Background(), platform.Env{ServiceMgr: platform.ServiceSystemd}, cfgPath, runner); err != nil {
+		t.Fatalf("unexpected error when systemd and config exist: %v", err)
 	}
 	if calls != 1 {
 		t.Fatalf("expected 1 automatic restart call, got %d", calls)
+	}
+
+	// Verify writeExampleConfig writes config.example.yaml alongside config.yaml.
+	exDest := exampleConfigPathFor(cfgPath)
+	if err := writeExampleConfig(exDest); err != nil {
+		t.Fatalf("writeExampleConfig failed: %v", err)
+	}
+	data, err := os.ReadFile(exDest)
+	if err != nil || !strings.Contains(string(data), "edge_firewall:") {
+		t.Fatalf("unexpected embedded example config content: err=%v len=%d", err, len(data))
 	}
 }
