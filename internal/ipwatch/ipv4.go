@@ -26,9 +26,11 @@ const (
 // It never returns a private or CGNAT address.
 func (d *Discoverer) DiscoverIPv4(ctx context.Context) (ip string, l3Device string, err error) {
 	candidate := ""
-	if st, ubusErr := d.ubus.Status(ctx, d.cfg.WAN.IfaceV4); ubusErr == nil {
-		l3Device = st.EffectiveL3Device()
-		candidate = st.PrimaryIPv4()
+	if d.ubus != nil {
+		if st, ubusErr := d.ubus.Status(ctx, d.cfg.WAN.IfaceV4); ubusErr == nil {
+			l3Device = st.EffectiveL3Device()
+			candidate = st.PrimaryIPv4()
+		}
 	}
 
 	if candidate == "" {
@@ -39,6 +41,9 @@ func (d *Discoverer) DiscoverIPv4(ctx context.Context) (ip string, l3Device stri
 			}
 			candidate = routeIP
 		}
+	}
+	if l3Device == "" && d.cfg.WAN.WANDeviceV4 != "" {
+		l3Device = d.cfg.WAN.WANDeviceV4
 	}
 
 	if candidate == "" {

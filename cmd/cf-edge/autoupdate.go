@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/diepkhoa/openwrt-cf-edge/internal/config"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/notify"
+	"github.com/diepkhoa/openwrt-cf-edge/internal/platform"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/state"
 )
 
@@ -25,6 +25,7 @@ type autoUpdater struct {
 	nowFn          func() time.Time
 	customClock    bool
 	updateFn       selfUpdateFunc
+	refreshFn      func(context.Context)
 	restartFn      func() error
 }
 
@@ -42,8 +43,20 @@ func newAutoUpdater(cfg *config.Config, notifier notify.Notifier, shieldLockPath
 		logger:         logger,
 		nowFn:          time.Now,
 		updateFn:       defaultAutoSelfUpdate,
+		refreshFn:      defaultAutoRefreshExample,
 		restartFn:      defaultRestartService,
 	}
+}
+
+func defaultAutoRefreshExample(ctx context.Context) {
+	execPath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if resolved, rErr := filepath.EvalSymlinks(execPath); rErr == nil {
+		execPath = resolved
+	}
+	refreshExampleConfigViaBinary(ctx, execPath, defaultConfigPath)
 }
 
 func defaultAutoSelfUpdate(ctx context.Context) (bool, string, error) {
@@ -61,8 +74,7 @@ func defaultAutoSelfUpdate(ctx context.Context) (bool, string, error) {
 }
 
 func defaultRestartService() error {
-	// Use Start (non-blocking) so procd SIGTERM stops daemon cleanly without waiting on itself.
-	return exec.Command("/etc/init.d/cf-edge", "restart").Start()
+	return startServiceRestartAsync(platform.Detect())
 }
 
 func nextDailyRun(now time.Time, hour, minute int) time.Time {
@@ -124,6 +136,9 @@ func (u *autoUpdater) runOnce(ctx context.Context) {
 	}
 
 	u.logger.Info("auto-update applied", "from", version, "to", newTag)
+	if u.refreshFn != nil {
+		u.refreshFn(ctx)
+	}
 	if u.notifier != nil {
 		msg := notify.FormatAutoUpdate(u.cfg.NodeName, version, newTag, u.cfg.AutoUpdate.Restart)
 		if sendErr := u.notifier.Send(ctx, msg); sendErr != nil {

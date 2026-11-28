@@ -13,6 +13,8 @@ import (
 
 type statusJSON struct {
 	OS           string               `json:"os"`
+	Platform     string               `json:"platform,omitempty"`
+	HasUbus      bool                 `json:"has_ubus"`
 	Version      string               `json:"version"`
 	Node         string               `json:"node"`
 	StateFile    string               `json:"state_file"`
@@ -74,6 +76,8 @@ func renderStatusJSON(w io.Writer, rep statusReport) error {
 
 	out := statusJSON{
 		OS:        rep.OS,
+		Platform:  rep.Platform,
+		HasUbus:   rep.HasUbus,
 		Version:   rep.Version,
 		Node:      cfg.NodeName,
 		StateFile: rep.StateFile,
@@ -131,7 +135,9 @@ func renderStatusJSON(w io.Writer, rep statusReport) error {
 		out.Shield.LockError = rep.LockErr.Error()
 	}
 
-	if rep.UbusErr != nil {
+	if !rep.HasUbus {
+		out.PPPoE.Error = "ubus unavailable (generic Linux mode)"
+	} else if rep.UbusErr != nil {
 		out.PPPoE.Error = rep.UbusErr.Error()
 	} else {
 		out.PPPoE.Up = rep.UbusStatus.Up

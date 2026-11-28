@@ -249,6 +249,25 @@ edge_firewall:
 		t.Fatalf("expected DDNS, Reconcile, and IPv6 DDNS disabled, got cf=%v rec=%v", noDDNS.Cloudflare.Enabled, noDDNS.Reconcile.Enabled)
 	}
 
+	// Verify preferred overlay_device/lan_device/wan_device_v4 sync cleanly with legacy aliases.
+	newDevCfg, err := Parse([]byte(`
+wan:
+  iface_v4: "wan"
+  wan_device_v4: "eth1.11"
+  overlay_device: "wt0"
+  lan_device: "br-lan.50"
+cloudflare:
+  enabled: false
+`))
+	if err != nil {
+		t.Fatalf("expected valid device config, got: %v", err)
+	}
+	if newDevCfg.WAN.EffectiveOverlayDevice() != "wt0" || newDevCfg.WAN.OverlayIface != "wt0" ||
+		newDevCfg.WAN.EffectiveLANDevice() != "br-lan.50" || newDevCfg.WAN.LANIface != "br-lan.50" ||
+		newDevCfg.WAN.WANDeviceV4 != "eth1.11" {
+		t.Fatalf("unexpected normalized WANConfig: %+v", newDevCfg.WAN)
+	}
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse([]byte(tc.yaml))

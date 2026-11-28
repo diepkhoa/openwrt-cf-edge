@@ -100,12 +100,31 @@ type AutoUpdateConfig struct {
 	Restart bool   `yaml:"restart"` // Restart /etc/init.d/cf-edge after updating binary (default true).
 }
 
-// WANConfig defines the WAN and overlay/LAN network interfaces on OpenWrt.
+// WANConfig defines the OpenWrt logical WAN interfaces and Linux kernel L3 device names.
 type WANConfig struct {
-	IfaceV4      string `yaml:"iface_v4"`
-	IfaceV6      string `yaml:"iface_v6"`
-	OverlayIface string `yaml:"overlay_iface"`
-	LANIface     string `yaml:"lan_iface"`
+	IfaceV4       string `yaml:"iface_v4"`       // OpenWrt logical interface for IPv4 (ubus)
+	IfaceV6       string `yaml:"iface_v6"`       // OpenWrt logical interface for IPv6 (ubus)
+	WANDeviceV4   string `yaml:"wan_device_v4"`  // Optional Linux L3 device override (e.g. pppoe-wan, eth1.11, eth0)
+	OverlayDevice string `yaml:"overlay_device"` // Linux L3 device for NetBird/WireGuard (e.g. wt0)
+	LANDevice     string `yaml:"lan_device"`     // Linux L3 device for LAN bridge (e.g. br-lan, br-lan.50)
+	OverlayIface  string `yaml:"overlay_iface"`  // Deprecated alias for overlay_device
+	LANIface      string `yaml:"lan_iface"`      // Deprecated alias for lan_device
+}
+
+// EffectiveOverlayDevice returns the configured overlay L3 device (overlay_device or legacy overlay_iface).
+func (w WANConfig) EffectiveOverlayDevice() string {
+	if w.OverlayDevice != "" {
+		return w.OverlayDevice
+	}
+	return w.OverlayIface
+}
+
+// EffectiveLANDevice returns the configured LAN L3 device (lan_device or legacy lan_iface).
+func (w WANConfig) EffectiveLANDevice() string {
+	if w.LANDevice != "" {
+		return w.LANDevice
+	}
+	return w.LANIface
 }
 
 // CloudflareConfig defines Cloudflare DNS zone credentials and managed subdomains.

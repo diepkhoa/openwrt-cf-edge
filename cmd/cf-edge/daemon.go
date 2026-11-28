@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/diepkhoa/openwrt-cf-edge/internal/cloudflare"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/config"
@@ -17,6 +18,7 @@ import (
 	"github.com/diepkhoa/openwrt-cf-edge/internal/ipwatch"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/netutil"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/notify"
+	"github.com/diepkhoa/openwrt-cf-edge/internal/platform"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/pppoeguard"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/reconcile"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/state"
@@ -24,9 +26,10 @@ import (
 )
 
 type runtimeDeps struct {
+	env        platform.Env
 	cfg        *config.Config
 	store      *state.Store
-	ubusClient *ubus.UbusClient
+	ubusClient ubus.Client
 	netInsp    netutil.NetInspector
 	pinger     netutil.Pinger
 	notifier   *notify.TelegramClient
@@ -49,7 +52,23 @@ func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
 		return nil, fmt.Errorf("load state: %w", err)
 	}
 
-	ubusClient := ubus.NewClient(nil)
+	env := platform.Detect()
+	var ubusClient ubus.Client
+	if env.HasUbus {
+		ubusClient = ubus.NewClient(nil)
+		// Normalize any logical OpenWrt interface names (e.g. "netbird", "lan") to kernel L3 devices.
+		resolveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if ov := platform.ResolveKernelDevice(resolveCtx, ubusClient, cfg.WAN.EffectiveOverlayDevice(), logger); ov != "" {
+			cfg.WAN.OverlayDevice = ov
+			cfg.WAN.OverlayIface = ov
+		}
+		if lan := platform.ResolveKernelDevice(resolveCtx, ubusClient, cfg.WAN.EffectiveLANDevice(), logger); lan != "" {
+			cfg.WAN.LANDevice = lan
+			cfg.WAN.LANIface = lan
+		}
+		cancel()
+	}
+
 	netInsp := netutil.LinuxInspector{}
 	pinger := &netutil.RawPinger{}
 	notifier := notify.NewTelegramClient(cfg.Telegram)
@@ -88,6 +107,7 @@ func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
 	edgeFW := edgefw.NewManager(cfg, ubusClient, nil, nil, nil, nil, notifier, logger)
 
 	return &runtimeDeps{
+		env:        env,
 		cfg:        cfg,
 		store:      store,
 		ubusClient: ubusClient,
@@ -123,7 +143,15 @@ func runDaemon(args []string) error {
 		return err
 	}
 
-	listener := ubus.NewListener(nil, logger)
+	var listener *ubus.Listener
+	if deps.env.HasUbus {
+		listener = ubus.NewListener(nil, logger)
+	} else {
+		logger.Info("ubus not detected; running in generic Linux mode (using Netlink/reconcile fallbacks)")
+		if deps.cfg.Cloudflare.Enabled && !deps.cfg.Reconcile.Enabled {
+			logger.Warn("reconcile is disabled on non-OpenWrt Linux without ubus events; enable reconcile for periodic DNS updates")
+		}
+	}
 
 	watcher := ipwatch.NewWatcher(
 		deps.cfg,
@@ -151,43 +179,47 @@ func runDaemon(args []string) error {
 
 	var pppoeGuard *pppoeguard.Guard
 	if deps.cfg.PPPoEGuard.Enabled {
-		pppoeGuard = pppoeguard.NewGuard(
-			deps.cfg,
-			deps.ubusClient,
-			listener,
-			deps.pinger,
-			deps.store,
-			deps.notifier,
-			logger,
-		)
-		// Reconstruct shieldMgr with redial hook so PPPoE Guard ignores intentional BRAS flush redials.
-		deps.shieldMgr = ddos.NewShieldManager(
-			deps.cfg,
-			deps.ubusClient,
-			deps.pinger,
-			ddos.NewProcSysReader(),
-			deps.firewall,
-			deps.worker,
-			deps.store,
-			deps.notifier,
-			func(ctx context.Context) (string, error) {
-				ip, _, err := deps.discoverer.DiscoverIPv4(ctx)
-				return ip, err
-			},
-			func(ctx context.Context) error {
-				if !deps.cfg.Cloudflare.Enabled {
-					return nil
-				}
-				snap, err := deps.discoverer.Discover(ctx)
-				if err != nil {
-					return err
-				}
-				return deps.updater.Sync(ctx, snap, cloudflare.SyncOptions{Force: true})
-			},
-			state.DefaultShieldLockPath,
-			logger,
-			ddos.WithRedialHook(pppoeGuard.SetExternalRedialing),
-		)
+		if !deps.env.HasUbus {
+			logger.Warn("pppoe_guard requires OpenWrt ubus/netifd and has been disabled on generic Linux")
+		} else {
+			pppoeGuard = pppoeguard.NewGuard(
+				deps.cfg,
+				deps.ubusClient,
+				listener,
+				deps.pinger,
+				deps.store,
+				deps.notifier,
+				logger,
+			)
+			// Reconstruct shieldMgr with redial hook so PPPoE Guard ignores intentional BRAS flush redials.
+			deps.shieldMgr = ddos.NewShieldManager(
+				deps.cfg,
+				deps.ubusClient,
+				deps.pinger,
+				ddos.NewProcSysReader(),
+				deps.firewall,
+				deps.worker,
+				deps.store,
+				deps.notifier,
+				func(ctx context.Context) (string, error) {
+					ip, _, err := deps.discoverer.DiscoverIPv4(ctx)
+					return ip, err
+				},
+				func(ctx context.Context) error {
+					if !deps.cfg.Cloudflare.Enabled {
+						return nil
+					}
+					snap, err := deps.discoverer.Discover(ctx)
+					if err != nil {
+						return err
+					}
+					return deps.updater.Sync(ctx, snap, cloudflare.SyncOptions{Force: true})
+				},
+				state.DefaultShieldLockPath,
+				logger,
+				ddos.WithRedialHook(pppoeGuard.SetExternalRedialing),
+			)
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -196,10 +228,11 @@ func runDaemon(args []string) error {
 	logger.Info("starting cf-edge daemon",
 		"node", deps.cfg.NodeName,
 		"version", version,
+		"platform", deps.env.String(),
 		"ddns", deps.cfg.Cloudflare.Enabled,
 		"reconcile", deps.cfg.Reconcile.Enabled,
-		"pppoe_guard", deps.cfg.PPPoEGuard.Enabled,
-		"ddos_shield", deps.cfg.DDoSShield.Enabled,
+		"pppoe_guard", deps.env.HasUbus && deps.cfg.PPPoEGuard.Enabled,
+		"ddos_shield", deps.env.HasUbus && deps.cfg.DDoSShield.Enabled,
 		"edge_firewall", deps.cfg.EdgeFirewall.Enabled,
 		"auto_update", deps.cfg.AutoUpdate.Enabled,
 	)
@@ -215,7 +248,9 @@ func runDaemon(args []string) error {
 		}()
 	}
 
-	start("ubus.Listener", listener.Run)
+	if listener != nil {
+		start("ubus.Listener", listener.Run)
+	}
 	if deps.cfg.Cloudflare.Enabled {
 		start("ipwatch.Watcher", watcher.Run)
 		if deps.cfg.Reconcile.Enabled {
@@ -225,11 +260,15 @@ func runDaemon(args []string) error {
 	if pppoeGuard != nil {
 		start("pppoeguard.Guard", pppoeGuard.Run)
 	}
-	if deps.cfg.DDoSShield.Enabled || state.IsShielded(state.DefaultShieldLockPath) {
+	if (deps.env.HasUbus && deps.cfg.DDoSShield.Enabled) || state.IsShielded(state.DefaultShieldLockPath) {
 		start("ddos.ShieldManager", deps.shieldMgr.Run)
+	} else if !deps.env.HasUbus && deps.cfg.DDoSShield.Enabled {
+		logger.Warn("ddos_shield PPPoE redial requires OpenWrt ubus/netifd and has been skipped on generic Linux")
 	}
 	if deps.cfg.EdgeFirewall.Enabled {
-		deps.edgeFW.SetListener(listener)
+		if listener != nil {
+			deps.edgeFW.SetListener(listener)
+		}
 		start("edgefw.Manager", deps.edgeFW.Run)
 	}
 	if deps.cfg.AutoUpdate.Enabled {

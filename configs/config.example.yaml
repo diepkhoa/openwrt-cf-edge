@@ -4,10 +4,13 @@
 node_name: "x96air" # Defaults to os.Hostname() if omitted
 
 wan:
-  iface_v4: "wan"          # OpenWrt logical interface name for IPv4 WAN (ubus network.interface.<name>)
-  iface_v6: "wan6"         # Leave empty if node does not use a separate IPv6 interface
-  overlay_iface: "wt0"     # NetBird/WireGuard overlay device (required by ddos_shield; excluded from WAN firewall)
-  lan_iface: "br-lan"      # Optional: L3 bridge for IPv6 PD fallback, Junk_Mbps TX_LAN subtraction & WAN exclusion
+  # OpenWrt logical interface names (in /etc/config/network; ignored on standard Linux/LXC)
+  iface_v4: "wan"          # e.g. "wan" (underlying L3 device may be pppoe-wan or eth1.11)
+  iface_v6: "wan6"         # Leave empty if node does not use a separate IPv6 interface or alias
+  # Linux kernel L3 device names (as shown by `ip link` / `/sys/class/net/`)
+  wan_device_v4: ""        # Optional override (e.g. "pppoe-wan", "eth1.11", "eth0"); empty = auto-detect
+  overlay_device: "wt0"    # NetBird/WireGuard kernel device (OpenWrt iface "netbird" -> device "wt0")
+  lan_device: "br-lan"     # LAN bridge kernel device (e.g. "br-lan" or "br-lan.50"; legacy overlay_iface/lan_iface still work)
 
 cloudflare:
   enabled: true            # Set false to disable DDNS + Reconcile completely (zone_id/api_token/records become optional)

@@ -54,7 +54,7 @@ func TestAutoUpdaterRunOnceShieldNotifyAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var updateCalls, restartCalls int
+	var updateCalls, refreshCalls, restartCalls int
 	notif := &fakeAutoNotifier{}
 	cfg := &config.Config{
 		NodeName: "knr3053",
@@ -70,6 +70,9 @@ func TestAutoUpdaterRunOnceShieldNotifyAndRestart(t *testing.T) {
 		updateCalls++
 		return true, "v0.1.9", nil
 	}
+	u.refreshFn = func(context.Context) {
+		refreshCalls++
+	}
 	u.restartFn = func() error {
 		restartCalls++
 		return nil
@@ -77,15 +80,15 @@ func TestAutoUpdaterRunOnceShieldNotifyAndRestart(t *testing.T) {
 
 	// While shielded, scheduled auto-update must skip.
 	u.runOnce(context.Background())
-	if updateCalls != 0 || restartCalls != 0 {
-		t.Fatalf("expected skip while shielded, got update=%d restart=%d", updateCalls, restartCalls)
+	if updateCalls != 0 || refreshCalls != 0 || restartCalls != 0 {
+		t.Fatalf("expected skip while shielded, got update=%d refresh=%d restart=%d", updateCalls, refreshCalls, restartCalls)
 	}
 
-	// Remove shield.lock -> must update, send Telegram notification, and trigger restart.
+	// Remove shield.lock -> must update, refresh example config, send Telegram notification, and trigger restart.
 	_ = os.Remove(lockPath)
 	u.runOnce(context.Background())
-	if updateCalls != 1 || restartCalls != 1 || len(notif.msgs) != 1 {
-		t.Fatalf("unexpected calls after shield removed: update=%d restart=%d msgs=%d", updateCalls, restartCalls, len(notif.msgs))
+	if updateCalls != 1 || refreshCalls != 1 || restartCalls != 1 || len(notif.msgs) != 1 {
+		t.Fatalf("unexpected calls after shield removed: update=%d refresh=%d restart=%d msgs=%d", updateCalls, refreshCalls, restartCalls, len(notif.msgs))
 	}
 	if !strings.Contains(notif.msgs[0], "v0.1.9") {
 		t.Fatalf("expected new version in Telegram notification, got %q", notif.msgs[0])

@@ -90,7 +90,7 @@ func (c *Config) validateEdgeFirewallTargets(ef *EdgeFirewallConfig) error {
 		if trimmed == "" {
 			return fmt.Errorf("edge_firewall.wan_devices[%d] must not be empty", i)
 		}
-		if IsForbiddenWANDevice(trimmed, c.WAN.LANIface, c.WAN.OverlayIface) {
+		if IsForbiddenWANDevice(trimmed, c.WAN.EffectiveLANDevice(), c.WAN.EffectiveOverlayDevice()) {
 			return fmt.Errorf("edge_firewall.wan_devices[%d] (%q) cannot reference loopback, LAN, bridge, or overlay interface", i, trimmed)
 		}
 		ef.WANDevices[i] = trimmed

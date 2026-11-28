@@ -20,6 +20,8 @@ import (
 
 type statusReport struct {
 	OS           string
+	Platform     string
+	HasUbus      bool
 	Version      string
 	Cfg          *config.Config
 	StateFile    string
@@ -57,6 +59,8 @@ func runStatus(args []string) error {
 
 	rep := statusReport{
 		OS:        runtime.GOOS + "/" + runtime.GOARCH,
+		Platform:  deps.env.String(),
+		HasUbus:   deps.env.HasUbus,
 		Version:   version,
 		Cfg:       deps.cfg,
 		StateFile: deps.store.Path(),
@@ -69,7 +73,9 @@ func runStatus(args []string) error {
 	rep.Lock, rep.Shielded, rep.LockErr = state.ReadShieldLock(state.DefaultShieldLockPath)
 	rep.NftActive, _ = deps.firewall.IsActive(ctx)
 	rep.EdgeFWStatus = deps.edgeFW.Status(ctx)
-	rep.UbusStatus, rep.UbusErr = deps.ubusClient.Status(ctx, deps.cfg.WAN.IfaceV4)
+	if deps.ubusClient != nil {
+		rep.UbusStatus, rep.UbusErr = deps.ubusClient.Status(ctx, deps.cfg.WAN.IfaceV4)
+	}
 
 	if *jsonOut {
 		return renderStatusJSON(os.Stdout, rep)
@@ -83,6 +89,9 @@ func renderStatus(w io.Writer, rep statusReport) {
 	cfg := rep.Cfg
 
 	fmt.Fprintf(w, "OS:            %s\n", rep.OS)
+	if rep.Platform != "" {
+		fmt.Fprintf(w, "Platform:      %s\n", rep.Platform)
+	}
 	fmt.Fprintf(w, "Version:       %s\n", rep.Version)
 	fmt.Fprintf(w, "Node:          %s\n", cfg.NodeName)
 	fmt.Fprintf(w, "State File:    %s\n", rep.StateFile)
@@ -132,19 +141,23 @@ func renderStatus(w io.Writer, rep statusReport) {
 	}
 	fmt.Fprintf(w, "Telegram:      %v\n", cfg.Telegram.Enabled)
 
-	if rep.UbusErr != nil {
-		fmt.Fprintf(w, "PPPoE (%s):   unavailable (%v)\n", cfg.WAN.IfaceV4, rep.UbusErr)
-	} else {
-		var errCodes []string
-		for _, e := range rep.UbusStatus.Errors {
-			errCodes = append(errCodes, e.Code)
+	if rep.HasUbus {
+		if rep.UbusErr != nil {
+			fmt.Fprintf(w, "PPPoE (%s):   unavailable (%v)\n", cfg.WAN.IfaceV4, rep.UbusErr)
+		} else {
+			var errCodes []string
+			for _, e := range rep.UbusStatus.Errors {
+				errCodes = append(errCodes, e.Code)
+			}
+			errSummary := "none"
+			if len(errCodes) > 0 {
+				errSummary = strings.Join(errCodes, ",")
+			}
+			fmt.Fprintf(w, "PPPoE (%s):   up=%v pending=%v dev=%s uptime=%ds errors=%s\n",
+				cfg.WAN.IfaceV4, rep.UbusStatus.Up, rep.UbusStatus.Pending, valueOrDash(rep.UbusStatus.EffectiveL3Device()), rep.UbusStatus.Uptime, errSummary)
 		}
-		errSummary := "none"
-		if len(errCodes) > 0 {
-			errSummary = strings.Join(errCodes, ",")
-		}
-		fmt.Fprintf(w, "PPPoE (%s):   up=%v pending=%v dev=%s uptime=%ds errors=%s\n",
-			cfg.WAN.IfaceV4, rep.UbusStatus.Up, rep.UbusStatus.Pending, valueOrDash(rep.UbusStatus.EffectiveL3Device()), rep.UbusStatus.Uptime, errSummary)
+	} else if rep.Platform != "" {
+		fmt.Fprintln(w, "PPPoE:         unavailable (requires OpenWrt ubus)")
 	}
 
 	if cfg.Cloudflare.Enabled && len(st.Records) > 0 {
