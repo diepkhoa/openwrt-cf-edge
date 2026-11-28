@@ -42,6 +42,12 @@ func defaultConfig() Config {
 			StatusPollInterval: Duration(2 * time.Minute),
 		},
 		EdgeFirewall: defaultEdgeFirewallConfig(),
+		Metrics: MetricsConfig{
+			Enabled:            false,
+			Port:               9108,
+			IncludeNftCounters: true,
+		},
+		MeshWatchdog: defaultMeshWatchdogConfig(),
 		AutoUpdate: AutoUpdateConfig{
 			Enabled: false,
 			Time:    "03:30",
@@ -86,6 +92,8 @@ func (c *Config) normalizeAndValidate() error {
 		c.validatePPPoEGuard,
 		c.validateDDoSShield,
 		c.validateEdgeFirewall,
+		c.validateMetrics,
+		c.validateMeshWatchdog,
 		c.validateAutoUpdate,
 		c.validateTelegram,
 	} {
@@ -234,6 +242,30 @@ func (c *Config) validateDDoSShield() error {
 	}
 	if c.DDoSShield.MaxRedialsPerHour <= 0 {
 		return errors.New("ddos_shield.max_redials_per_hour must be positive")
+	}
+	return nil
+}
+
+func (c *Config) validateMetrics() error {
+	c.Metrics.BindDevice = strings.TrimSpace(c.Metrics.BindDevice)
+	if c.Metrics.Port == 0 {
+		c.Metrics.Port = 9108
+	}
+	if c.Metrics.Port < 1 || c.Metrics.Port > 65535 {
+		return errors.New("metrics.port must be between 1 and 65535")
+	}
+	if !c.Metrics.Enabled {
+		return nil
+	}
+	if c.Metrics.BindDevice == "" {
+		c.Metrics.BindDevice = c.WAN.EffectiveOverlayDevice()
+	}
+	if c.Metrics.BindDevice == "" {
+		return errors.New("metrics.bind_device (or wan.overlay_device) must not be empty when metrics is enabled")
+	}
+	switch strings.ToLower(c.Metrics.BindDevice) {
+	case "0.0.0.0", "::", "*", "any":
+		return fmt.Errorf("metrics.bind_device %q must name a specific network device (e.g. wt0), never wildcard", c.Metrics.BindDevice)
 	}
 	return nil
 }

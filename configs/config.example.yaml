@@ -94,6 +94,36 @@ edge_firewall:
       per_ip_pps: 5000
       per_ip_burst: 800
 
+# Optional: Prometheus /metrics HTTP server bound strictly to NetBird/overlay IP (never exposed on WAN)
+metrics:
+  enabled: false                             # Opt-in: enable on routers you want scraped by VictoriaMetrics/Grafana
+  bind_device: ""                            # Empty = uses wan.overlay_device ("wt0"); wildcard bind is forbidden
+  port: 9108                                 # Scrape endpoint: http://<wt0-ip>:9108/metrics
+  include_nft_counters: true                 # Export packet/byte counters from table inet cf_edge_fw
+
+# Optional: Cross-site NetBird peer watchdog (uses NetBird daemon + wt0 ICMP + deterministic IP priority)
+mesh_watchdog:
+  enabled: false                             # Enable on 3+ independent sites (e.g. Proxmox, X96Air, KNR3053)
+  check_interval: "30s"
+  fail_threshold: 3                          # 3 consecutive failures (90s) -> confirmed OFFLINE
+  recovery_threshold: 2                      # 2 consecutive successes (60s) -> confirmed ONLINE
+  require_netbird_mgmt: true                 # Only alert when local NetBird management.connected == true
+  min_other_site_online: 1                   # Require >= 1 other-site peer online (prevents isolated-node spam)
+  rank_delay_step: "10s"                     # Stagger delay by priority rank to avoid duplicate alerts
+  peers:                                     # Top-to-bottom order = priority to send Telegram alerts
+    - name: "proxmox"
+      ip: "100.123.0.10"
+      site: "site-proxmox"
+      can_notify: true
+    - name: "x96air"
+      ip: "100.123.0.1"
+      site: "site-edge"
+      can_notify: true
+    - name: "knr3053"
+      ip: "100.123.130.59"
+      site: "site-branch"
+      can_notify: true
+
 # Optional: Check GitHub Releases once per day at a custom local time (24h "HH:MM")
 auto_update:
   enabled: false
