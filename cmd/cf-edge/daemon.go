@@ -16,6 +16,7 @@ import (
 	"github.com/diepkhoa/openwrt-cf-edge/internal/ddos"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/edgefw"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/ipwatch"
+	"github.com/diepkhoa/openwrt-cf-edge/internal/metrics"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/netutil"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/notify"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/platform"
@@ -39,6 +40,7 @@ type runtimeDeps struct {
 	worker     ddos.WorkerAPI
 	shieldMgr  *ddos.ShieldManager
 	edgeFW     *edgefw.Manager
+	metricsCol *metrics.Collector
 }
 
 func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
@@ -65,6 +67,9 @@ func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
 		if lan := platform.ResolveKernelDevice(resolveCtx, ubusClient, cfg.WAN.EffectiveLANDevice(), logger); lan != "" {
 			cfg.WAN.LANDevice = lan
 			cfg.WAN.LANIface = lan
+		}
+		if cfg.Metrics.BindDevice != "" {
+			cfg.Metrics.BindDevice = platform.ResolveKernelDevice(resolveCtx, ubusClient, cfg.Metrics.BindDevice, logger)
 		}
 		cancel()
 	}
@@ -105,6 +110,12 @@ func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
 		logger,
 	)
 	edgeFW := edgefw.NewManager(cfg, ubusClient, nil, nil, nil, nil, notifier, logger)
+	metricsCol := metrics.NewCollector(cfg, env, version, ubusClient, store, ddos.NewProcSysReader(), nil, func(ctx context.Context) string {
+		if iface, _, err := netInsp.DefaultRouteIPv4(ctx); err == nil {
+			return iface
+		}
+		return ""
+	}, state.DefaultShieldLockPath)
 
 	return &runtimeDeps{
 		env:        env,
@@ -120,6 +131,7 @@ func buildDeps(cfgPath string, logger *slog.Logger) (*runtimeDeps, error) {
 		worker:     worker,
 		shieldMgr:  shieldMgr,
 		edgeFW:     edgeFW,
+		metricsCol: metricsCol,
 	}, nil
 }
 
@@ -234,6 +246,7 @@ func runDaemon(args []string) error {
 		"pppoe_guard", deps.env.HasUbus && deps.cfg.PPPoEGuard.Enabled,
 		"ddos_shield", deps.env.HasUbus && deps.cfg.DDoSShield.Enabled,
 		"edge_firewall", deps.cfg.EdgeFirewall.Enabled,
+		"metrics", deps.cfg.Metrics.Enabled,
 		"auto_update", deps.cfg.AutoUpdate.Enabled,
 	)
 
@@ -270,6 +283,10 @@ func runDaemon(args []string) error {
 			deps.edgeFW.SetListener(listener)
 		}
 		start("edgefw.Manager", deps.edgeFW.Run)
+	}
+	if deps.cfg.Metrics.Enabled {
+		metricsSrv := metrics.NewServer(deps.cfg.Metrics, deps.metricsCol, logger)
+		start("metrics.Server", metricsSrv.Run)
 	}
 	if deps.cfg.AutoUpdate.Enabled {
 		autoUpd := newAutoUpdater(deps.cfg, deps.notifier, state.DefaultShieldLockPath, logger)

@@ -94,6 +94,13 @@ edge_firewall:
       per_ip_pps: 5000
       per_ip_burst: 800
 
+# Optional: Prometheus /metrics HTTP server bound strictly to NetBird/overlay IP (never exposed on WAN)
+metrics:
+  enabled: false                             # Opt-in: enable on routers you want scraped by VictoriaMetrics/Grafana
+  bind_device: ""                            # Empty = uses wan.overlay_device ("wt0"); wildcard bind is forbidden
+  port: 9108                                 # Scrape endpoint: http://<wt0-ip>:9108/metrics
+  include_nft_counters: true                 # Export packet/byte counters from table inet cf_edge_fw
+
 # Optional: Check GitHub Releases once per day at a custom local time (24h "HH:MM")
 auto_update:
   enabled: false

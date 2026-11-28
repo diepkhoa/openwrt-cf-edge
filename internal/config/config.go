@@ -54,8 +54,17 @@ type Config struct {
 	PPPoEGuard   PPPoEGuardConfig   `yaml:"pppoe_guard"`
 	DDoSShield   DDoSShieldConfig   `yaml:"ddos_shield"`
 	EdgeFirewall EdgeFirewallConfig `yaml:"edge_firewall"`
+	Metrics      MetricsConfig      `yaml:"metrics"`
 	AutoUpdate   AutoUpdateConfig   `yaml:"auto_update"`
 	Telegram     TelegramConfig     `yaml:"telegram"`
+}
+
+// MetricsConfig configures the optional Prometheus /metrics exporter bound to the overlay device.
+type MetricsConfig struct {
+	Enabled            bool   `yaml:"enabled"`
+	BindDevice         string `yaml:"bind_device"`
+	Port               int    `yaml:"port"`
+	IncludeNftCounters bool   `yaml:"include_nft_counters"`
 }
 
 // EdgeFirewallConfig configures the OpenWrt fw4-native GeoIP & rate-limit nftables module.
