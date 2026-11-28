@@ -77,6 +77,11 @@ func runSelfUpdate(args []string) error {
 }
 
 func refreshExampleConfigViaBinary(ctx context.Context, execPath, configPath string) {
+	// Never execute a `go test` binary recursively when triggered inside tests.
+	low := strings.ToLower(execPath)
+	if flag.Lookup("test.v") != nil || strings.HasSuffix(low, ".test") || strings.HasSuffix(low, ".test.exe") {
+		return
+	}
 	exPath := exampleConfigPathFor(configPath)
 	out, err := exec.CommandContext(ctx, execPath, "config-example", "--out", exPath).CombinedOutput()
 	if err != nil {

@@ -25,6 +25,7 @@ type autoUpdater struct {
 	nowFn          func() time.Time
 	customClock    bool
 	updateFn       selfUpdateFunc
+	refreshFn      func(context.Context)
 	restartFn      func() error
 }
 
@@ -42,8 +43,20 @@ func newAutoUpdater(cfg *config.Config, notifier notify.Notifier, shieldLockPath
 		logger:         logger,
 		nowFn:          time.Now,
 		updateFn:       defaultAutoSelfUpdate,
+		refreshFn:      defaultAutoRefreshExample,
 		restartFn:      defaultRestartService,
 	}
+}
+
+func defaultAutoRefreshExample(ctx context.Context) {
+	execPath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if resolved, rErr := filepath.EvalSymlinks(execPath); rErr == nil {
+		execPath = resolved
+	}
+	refreshExampleConfigViaBinary(ctx, execPath, defaultConfigPath)
 }
 
 func defaultAutoSelfUpdate(ctx context.Context) (bool, string, error) {
@@ -123,11 +136,8 @@ func (u *autoUpdater) runOnce(ctx context.Context) {
 	}
 
 	u.logger.Info("auto-update applied", "from", version, "to", newTag)
-	if execPath, epErr := os.Executable(); epErr == nil {
-		if resolved, rErr := filepath.EvalSymlinks(execPath); rErr == nil {
-			execPath = resolved
-		}
-		refreshExampleConfigViaBinary(ctx, execPath, defaultConfigPath)
+	if u.refreshFn != nil {
+		u.refreshFn(ctx)
 	}
 	if u.notifier != nil {
 		msg := notify.FormatAutoUpdate(u.cfg.NodeName, version, newTag, u.cfg.AutoUpdate.Restart)
