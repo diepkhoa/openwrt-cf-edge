@@ -16,6 +16,7 @@ import (
 	"github.com/diepkhoa/openwrt-cf-edge/internal/ddos"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/edgefw"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/ipwatch"
+	"github.com/diepkhoa/openwrt-cf-edge/internal/meshwatch"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/metrics"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/netutil"
 	"github.com/diepkhoa/openwrt-cf-edge/internal/notify"
@@ -247,6 +248,7 @@ func runDaemon(args []string) error {
 		"ddos_shield", deps.env.HasUbus && deps.cfg.DDoSShield.Enabled,
 		"edge_firewall", deps.cfg.EdgeFirewall.Enabled,
 		"metrics", deps.cfg.Metrics.Enabled,
+		"mesh_watchdog", deps.cfg.MeshWatchdog.Enabled,
 		"auto_update", deps.cfg.AutoUpdate.Enabled,
 	)
 
@@ -283,6 +285,11 @@ func runDaemon(args []string) error {
 			deps.edgeFW.SetListener(listener)
 		}
 		start("edgefw.Manager", deps.edgeFW.Run)
+	}
+	if deps.cfg.MeshWatchdog.Enabled {
+		meshWD := meshwatch.NewWatchdog(deps.cfg, nil, deps.pinger, deps.notifier, logger)
+		deps.metricsCol.SetPeerProvider(meshWD)
+		start("meshwatch.Watchdog", meshWD.Run)
 	}
 	if deps.cfg.Metrics.Enabled {
 		metricsSrv := metrics.NewServer(deps.cfg.Metrics, deps.metricsCol, logger)

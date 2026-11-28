@@ -162,4 +162,9 @@ func TestFormatDDNSUpdateGroupsHostsAndSortsTypes(t *testing.T) {
 		!strings.Contains(fwAlert, "outbound UDP dropped") {
 		t.Fatalf("unexpected firewall alert formatting:\n%s", fwAlert)
 	}
+
+	meshAlert := FormatMeshPeerAlert("proxmox", "x96air", "100.123.14.49", "site-edge", "OFFLINE", "missed 3 probes")
+	if !strings.Contains(meshAlert, "Mesh Peer OFFLINE") || !strings.Contains(meshAlert, "<code>100.123.14.49</code>") {
+		t.Fatalf("unexpected mesh alert formatting:\n%s", meshAlert)
+	}
 }
