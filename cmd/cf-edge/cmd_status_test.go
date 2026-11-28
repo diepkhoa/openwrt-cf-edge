@@ -52,6 +52,7 @@ func TestRenderStatusIncludesVersionAndDisabledFeaturesAsFalse(t *testing.T) {
 		"DDoS Shield:   false (shield=inactive, nft=false)",
 		"Edge Firewall: false",
 		"Metrics:       false",
+		"Mesh Watchdog: false",
 		"Auto-Update:   false",
 		"Telegram:      false",
 	} {

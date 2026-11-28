@@ -44,6 +44,8 @@ type statusFeaturesJSON struct {
 	Metrics           bool   `json:"metrics"`
 	MetricsPort       int    `json:"metrics_port,omitempty"`
 	MetricsBindDevice string `json:"metrics_bind_device,omitempty"`
+	MeshWatchdog      bool   `json:"mesh_watchdog"`
+	MeshPeers         int    `json:"mesh_peers,omitempty"`
 	AutoUpdate        bool   `json:"auto_update"`
 	AutoUpdateTime    string `json:"auto_update_time"`
 	AutoUpdateRestart bool   `json:"auto_update_restart"`
@@ -95,6 +97,8 @@ func renderStatusJSON(w io.Writer, rep statusReport) error {
 			Metrics:           cfg.Metrics.Enabled,
 			MetricsPort:       cfg.Metrics.Port,
 			MetricsBindDevice: cfg.Metrics.BindDevice,
+			MeshWatchdog:      cfg.MeshWatchdog.Enabled,
+			MeshPeers:         len(cfg.MeshWatchdog.Peers),
 			AutoUpdate:        cfg.AutoUpdate.Enabled,
 			AutoUpdateTime:    cfg.AutoUpdate.Time,
 			AutoUpdateRestart: cfg.AutoUpdate.Restart,

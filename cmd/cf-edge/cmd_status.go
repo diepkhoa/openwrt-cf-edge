@@ -138,6 +138,11 @@ func renderStatus(w io.Writer, rep statusReport) {
 	} else {
 		fmt.Fprintln(w, "Metrics:       false")
 	}
+	if cfg.MeshWatchdog.Enabled {
+		fmt.Fprintf(w, "Mesh Watchdog: true (peers=%d interval=%s)\n", len(cfg.MeshWatchdog.Peers), cfg.MeshWatchdog.CheckInterval.Std())
+	} else {
+		fmt.Fprintln(w, "Mesh Watchdog: false")
+	}
 
 	if cfg.AutoUpdate.Enabled {
 		fmt.Fprintf(w, "Auto-Update:   true (time=%s, restart=%v)\n", cfg.AutoUpdate.Time, cfg.AutoUpdate.Restart)

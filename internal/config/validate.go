@@ -47,6 +47,7 @@ func defaultConfig() Config {
 			Port:               9108,
 			IncludeNftCounters: true,
 		},
+		MeshWatchdog: defaultMeshWatchdogConfig(),
 		AutoUpdate: AutoUpdateConfig{
 			Enabled: false,
 			Time:    "03:30",
@@ -92,6 +93,7 @@ func (c *Config) normalizeAndValidate() error {
 		c.validateDDoSShield,
 		c.validateEdgeFirewall,
 		c.validateMetrics,
+		c.validateMeshWatchdog,
 		c.validateAutoUpdate,
 		c.validateTelegram,
 	} {
