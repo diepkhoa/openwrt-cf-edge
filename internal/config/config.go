@@ -54,8 +54,38 @@ type Config struct {
 	PPPoEGuard   PPPoEGuardConfig   `yaml:"pppoe_guard"`
 	DDoSShield   DDoSShieldConfig   `yaml:"ddos_shield"`
 	EdgeFirewall EdgeFirewallConfig `yaml:"edge_firewall"`
+	Metrics      MetricsConfig      `yaml:"metrics"`
+	MeshWatchdog MeshWatchdogConfig `yaml:"mesh_watchdog"`
 	AutoUpdate   AutoUpdateConfig   `yaml:"auto_update"`
 	Telegram     TelegramConfig     `yaml:"telegram"`
+}
+
+// MetricsConfig configures the optional Prometheus /metrics exporter bound to the overlay device.
+type MetricsConfig struct {
+	Enabled            bool   `yaml:"enabled"`
+	BindDevice         string `yaml:"bind_device"`
+	Port               int    `yaml:"port"`
+	IncludeNftCounters bool   `yaml:"include_nft_counters"`
+}
+
+// MeshWatchdogConfig configures cross-site NetBird peer liveness monitoring and priority-ordered alerts.
+type MeshWatchdogConfig struct {
+	Enabled            bool             `yaml:"enabled"`
+	CheckInterval      Duration         `yaml:"check_interval"`
+	FailThreshold      int              `yaml:"fail_threshold"`
+	RecoveryThreshold  int              `yaml:"recovery_threshold"`
+	RequireNetBirdMgmt bool             `yaml:"require_netbird_mgmt"`
+	MinOtherSiteOnline int              `yaml:"min_other_site_online"`
+	RankDelayStep      Duration         `yaml:"rank_delay_step"`
+	Peers              []MeshPeerConfig `yaml:"peers"`
+}
+
+// MeshPeerConfig defines one peer in the ordered NetBird notification hierarchy.
+type MeshPeerConfig struct {
+	Name      string `yaml:"name"`
+	IP        string `yaml:"ip"`
+	Site      string `yaml:"site"`
+	CanNotify bool   `yaml:"can_notify"`
 }
 
 // EdgeFirewallConfig configures the OpenWrt fw4-native GeoIP & rate-limit nftables module.

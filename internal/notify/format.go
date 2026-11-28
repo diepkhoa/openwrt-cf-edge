@@ -149,3 +149,21 @@ func FormatFirewallAlert(nodeName, action, detail string) string {
 		html.EscapeString(detail),
 	)
 }
+
+// FormatMeshPeerAlert builds an HTML alert when a peer goes OFFLINE or RECOVERS on the NetBird mesh.
+func FormatMeshPeerAlert(reporterNode, peerName, peerIP, site, status, detail string) string {
+	icon := "🔴"
+	if strings.EqualFold(status, "ONLINE") || strings.EqualFold(status, "RECOVERED") {
+		icon = "🟢"
+	}
+	return fmt.Sprintf(
+		"%s <b>[cf-edge] Mesh Peer %s</b> — <code>%s</code>\n• <b>Peer IP:</b> <code>%s</code> (<code>%s</code>)\n• <b>Reporter:</b> <code>%s</code>\n• <b>Detail:</b> %s",
+		icon,
+		html.EscapeString(status),
+		html.EscapeString(peerName),
+		html.EscapeString(peerIP),
+		html.EscapeString(site),
+		html.EscapeString(reporterNode),
+		html.EscapeString(detail),
+	)
+}

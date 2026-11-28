@@ -205,6 +205,26 @@ func TestParseValidationErrors(t *testing.T) {
 			yaml: "cloudflare:\n  zone_id: z\n  api_token: t\n  records:\n    - subdomain: a.b\n      ipv4: true\nedge_firewall:\n  enabled: true\n  rules:\n    - name: rtc\n      chain: forward\n      proto: udp\n      ports: [50044]\n      max_conns_per_ip: 10",
 			want: "only apply to tcp",
 		},
+		{
+			name: "metrics rejects wildcard bind_device",
+			yaml: "cloudflare:\n  enabled: false\nmetrics:\n  enabled: true\n  bind_device: \"0.0.0.0\"",
+			want: "metrics.bind_device",
+		},
+		{
+			name: "metrics defaults bind_device from overlay_device",
+			yaml: "cloudflare:\n  enabled: false\nmetrics:\n  enabled: true",
+			want: "metrics.bind_device",
+		},
+		{
+			name: "mesh_watchdog requires overlay_device",
+			yaml: "cloudflare:\n  enabled: false\nmesh_watchdog:\n  enabled: true\n  peers:\n    - name: a\n      ip: 100.123.0.1\n      site: s1\n    - name: b\n      ip: 100.123.0.2\n      site: s2",
+			want: "overlay_device",
+		},
+		{
+			name: "mesh_watchdog rejects duplicate peer IP",
+			yaml: "wan:\n  overlay_device: wt0\ncloudflare:\n  enabled: false\nmesh_watchdog:\n  enabled: true\n  peers:\n    - name: a\n      ip: 100.123.0.1\n      site: s1\n    - name: b\n      ip: 100.123.0.1\n      site: s2",
+			want: "duplicate mesh_watchdog peer IP",
+		},
 	}
 
 	// Also verify normalizing single-digit hour and preserving restart=false.
